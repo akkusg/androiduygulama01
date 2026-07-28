@@ -1,0 +1,161 @@
+x-app-environment: &app-environment
+  APP_ENV: production
+  FLASK_DEBUG: "0"
+  TRUSTED_HOSTS: "${TRUSTED_HOSTS:?TRUSTED_HOSTS is required}"
+  AUTH_REQUIRED: "1"
+  SECRET_KEY: "${SECRET_KEY:?SECRET_KEY is required}"
+  MOBILE_MIN_SUPPORTED_VERSION_CODE: "${MOBILE_MIN_SUPPORTED_VERSION_CODE:?MOBILE_MIN_SUPPORTED_VERSION_CODE is required}"
+  MOBILE_LATEST_VERSION_CODE: "${MOBILE_LATEST_VERSION_CODE:?MOBILE_LATEST_VERSION_CODE is required}"
+  MOBILE_MAINTENANCE_MODE: "${MOBILE_MAINTENANCE_MODE:-0}"
+  MOBILE_MAINTENANCE_MESSAGE: "${MOBILE_MAINTENANCE_MESSAGE:-Planlı bakım nedeniyle kısa süre içinde tekrar deneyin.}"
+  MOBILE_UPDATE_MESSAGE: "${MOBILE_UPDATE_MESSAGE:-Devam etmek için uygulamanın güncel sürümünü yükleyin.}"
+  MOBILE_UPDATE_URL: "${MOBILE_UPDATE_URL:?MOBILE_UPDATE_URL is required}"
+  PRIVACY_POLICY_URL: "${PRIVACY_POLICY_URL:?PRIVACY_POLICY_URL is required}"
+  VIDEO_CONSENT_VERSION: "${VIDEO_CONSENT_VERSION:?VIDEO_CONSENT_VERSION is required}"
+  REQUIRE_VIDEO_CONSENT: "1"
+  MONGO_URI: "${MONGO_URI:?MONGO_URI is required}"
+  MONGO_DB_NAME: "${MONGO_DB_NAME:-yedi_yirmi_dort}"
+  STRICT_DATA_HYGIENE: "1"
+  UPLOAD_FOLDER: /data/uploads
+  MAX_CONTENT_LENGTH_MB: "${MAX_CONTENT_LENGTH_MB:-200}"
+  MAX_JSON_CONTENT_LENGTH_KB: "${MAX_JSON_CONTENT_LENGTH_KB:-1024}"
+  VIDEO_PROCESSING_INLINE: "0"
+  VIDEO_PROCESSING_MODE: worker
+  VIDEO_VALIDATE_CONTENT: "1"
+  FFPROBE_PATH: /usr/bin/ffprobe
+  VIDEO_DELETE_SOURCE_AFTER_PROCESSING: "1"
+  VIDEO_JOB_MAX_ATTEMPTS: "${VIDEO_JOB_MAX_ATTEMPTS:-3}"
+  VIDEO_JOB_LEASE_SECONDS: "${VIDEO_JOB_LEASE_SECONDS:-900}"
+  VIDEO_JOB_HEARTBEAT_SECONDS: "${VIDEO_JOB_HEARTBEAT_SECONDS:-60}"
+  VIDEO_JOB_RETRY_BASE_SECONDS: "${VIDEO_JOB_RETRY_BASE_SECONDS:-15}"
+  VIDEO_JOB_RETRY_MAX_SECONDS: "${VIDEO_JOB_RETRY_MAX_SECONDS:-900}"
+  VIDEO_JOB_RETENTION_SECONDS: "${VIDEO_JOB_RETENTION_SECONDS:-604800}"
+  VIDEO_WORKER_POLL_SECONDS: "${VIDEO_WORKER_POLL_SECONDS:-2}"
+  VIDEO_WORKER_HEARTBEAT_SECONDS: "${VIDEO_WORKER_HEARTBEAT_SECONDS:-10}"
+  VIDEO_WORKER_WARMUP_MODEL: "1"
+  VIDEO_UPLOAD_RATE_LIMIT_WINDOW_SECONDS: "${VIDEO_UPLOAD_RATE_LIMIT_WINDOW_SECONDS:-86400}"
+  VIDEO_UPLOAD_MAX_REQUESTS: "${VIDEO_UPLOAD_MAX_REQUESTS:-3}"
+  TRANSCRIPTION_PROVIDER: "${TRANSCRIPTION_PROVIDER:-faster_whisper}"
+  TRANSCRIPTION_LANGUAGE: "${TRANSCRIPTION_LANGUAGE:-tr}"
+  FASTER_WHISPER_MODEL_SIZE: "${FASTER_WHISPER_MODEL_SIZE:-tiny}"
+  FASTER_WHISPER_DEVICE: "${FASTER_WHISPER_DEVICE:-cpu}"
+  FASTER_WHISPER_COMPUTE_TYPE: "${FASTER_WHISPER_COMPUTE_TYPE:-int8}"
+  JOB_RECOMMENDATION_FALLBACK_ENABLED: "0"
+  SMS_PROVIDER: "${SMS_PROVIDER:?SMS_PROVIDER is required}"
+  TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID:-}"
+  TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN:-}"
+  TWILIO_FROM_NUMBER: "${TWILIO_FROM_NUMBER:-}"
+  OTP_STATIC_CODE: ""
+  OTP_EXPOSE_CODE: "0"
+  OTP_RATE_LIMIT_WINDOW_SECONDS: "${OTP_RATE_LIMIT_WINDOW_SECONDS:-900}"
+  OTP_PHONE_MAX_REQUESTS: "${OTP_PHONE_MAX_REQUESTS:-5}"
+  OTP_IP_MAX_REQUESTS: "${OTP_IP_MAX_REQUESTS:-20}"
+  ADMIN_USERNAME: "${ADMIN_USERNAME:?ADMIN_USERNAME is required}"
+  ADMIN_PASSWORD: ""
+  ADMIN_PASSWORD_HASH: "${ADMIN_PASSWORD_HASH:?ADMIN_PASSWORD_HASH is required}"
+  ADMIN_EMPLOYER_KEY: "${ADMIN_EMPLOYER_KEY:-default}"
+  ADMIN_AUDIT_RETENTION_DAYS: "${ADMIN_AUDIT_RETENTION_DAYS:-365}"
+  ACCOUNT_DELETION_AUDIT_RETENTION_DAYS: "${ACCOUNT_DELETION_AUDIT_RETENTION_DAYS:-365}"
+  WORKER_QUESTION_RATE_LIMIT_WINDOW_SECONDS: "${WORKER_QUESTION_RATE_LIMIT_WINDOW_SECONDS:-3600}"
+  WORKER_QUESTION_MAX_REQUESTS: "${WORKER_QUESTION_MAX_REQUESTS:-20}"
+  PUSH_PROVIDER: "${PUSH_PROVIDER:?PUSH_PROVIDER is required}"
+  FCM_PROJECT_ID: "${FCM_PROJECT_ID:?FCM_PROJECT_ID is required}"
+  PUSH_JOB_MAX_ATTEMPTS: "${PUSH_JOB_MAX_ATTEMPTS:-5}"
+  PUSH_JOB_LEASE_SECONDS: "${PUSH_JOB_LEASE_SECONDS:-60}"
+  PUSH_JOB_RETRY_BASE_SECONDS: "${PUSH_JOB_RETRY_BASE_SECONDS:-15}"
+  PUSH_JOB_RETRY_MAX_SECONDS: "${PUSH_JOB_RETRY_MAX_SECONDS:-900}"
+  PUSH_JOB_RETENTION_SECONDS: "${PUSH_JOB_RETENTION_SECONDS:-604800}"
+  PUSH_WORKER_POLL_SECONDS: "${PUSH_WORKER_POLL_SECONDS:-2}"
+  PUSH_WORKER_HEARTBEAT_SECONDS: "${PUSH_WORKER_HEARTBEAT_SECONDS:-10}"
+  PUSH_WORKER_VALIDATE_CREDENTIALS: "1"
+  PUSH_REGISTRATION_RETENTION_DAYS: "${PUSH_REGISTRATION_RETENTION_DAYS:-90}"
+  PUSH_MAX_ACTIVE_REGISTRATIONS_PER_WORKER: "${PUSH_MAX_ACTIVE_REGISTRATIONS_PER_WORKER:-5}"
+  PUSH_MAX_STORED_REGISTRATIONS_PER_WORKER: "${PUSH_MAX_STORED_REGISTRATIONS_PER_WORKER:-20}"
+  REQUIRE_IDEMPOTENCY_KEY: "1"
+  IDEMPOTENCY_RETENTION_SECONDS: "${IDEMPOTENCY_RETENTION_SECONDS:-86400}"
+  IDEMPOTENCY_PROCESSING_TIMEOUT_SECONDS: "${IDEMPOTENCY_PROCESSING_TIMEOUT_SECONDS:-120}"
+  IDEMPOTENCY_UPLOAD_PROCESSING_TIMEOUT_SECONDS: "${IDEMPOTENCY_UPLOAD_PROCESSING_TIMEOUT_SECONDS:-900}"
+  TRUSTED_PROXY_COUNT: "${TRUSTED_PROXY_COUNT:-0}"
+
+x-app-service: &app-service
+  build:
+    context: .
+  init: true
+  restart: unless-stopped
+  pids_limit: 256
+  environment: *app-environment
+  volumes:
+    - uploads:/data/uploads
+    - whisper-cache:/home/app/.cache/huggingface
+  read_only: true
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: json-file
+    options:
+      max-size: "${CONTAINER_LOG_MAX_SIZE:-10m}"
+      max-file: "${CONTAINER_LOG_MAX_FILES:-5}"
+
+services:
+  api:
+    <<: *app-service
+    command:
+      - gunicorn
+      - --workers
+      - "${WEB_CONCURRENCY:-3}"
+      - --bind
+      - 0.0.0.0:5050
+      - --timeout
+      - "${GUNICORN_TIMEOUT:-900}"
+      - --graceful-timeout
+      - "${GUNICORN_GRACEFUL_TIMEOUT:-30}"
+      - --keep-alive
+      - "${GUNICORN_KEEP_ALIVE:-5}"
+      - --max-requests
+      - "${GUNICORN_MAX_REQUESTS:-1000}"
+      - --max-requests-jitter
+      - "${GUNICORN_MAX_REQUESTS_JITTER:-100}"
+      - --access-logfile
+      - "-"
+      - --access-logformat
+      - '%(h)s %(t)s "%(r)s" %(s)s %(b)s %(L)s request_id="%({x-request-id}o)s"'
+      - run:app
+    ports:
+      - "${APP_PORT:-5050}:5050"
+
+  video-worker:
+    <<: *app-service
+    command: ["python", "worker.py"]
+    stop_grace_period: "${VIDEO_WORKER_STOP_GRACE_PERIOD:-20m}"
+    healthcheck:
+      test: ["CMD", "python", "worker_healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      start_period: "${VIDEO_WORKER_HEALTH_START_PERIOD:-5m}"
+      retries: 3
+
+  push-worker:
+    <<: *app-service
+    command: ["python", "push_worker.py"]
+    stop_grace_period: "${PUSH_WORKER_STOP_GRACE_PERIOD:-2m}"
+    environment:
+      <<: *app-environment
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+    volumes:
+      - uploads:/data/uploads
+      - whisper-cache:/home/app/.cache/huggingface
+      - "${FCM_CREDENTIALS_FILE_HOST:?FCM_CREDENTIALS_FILE_HOST is required}:/run/secrets/firebase-service-account.json:ro"
+    healthcheck:
+      test: ["CMD", "python", "push_worker_healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      start_period: "${PUSH_WORKER_HEALTH_START_PERIOD:-60s}"
+      retries: 3
+
+volumes:
+  uploads:
+  whisper-cache:

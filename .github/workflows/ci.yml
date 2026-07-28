@@ -1,0 +1,231 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: b7_24
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: b7_24/requirements-dev.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --requirement requirements-dev.txt
+          python -m pip install bandit==1.9.4 pip-audit==2.10.1
+          python -m pip check
+
+      - name: Run backend tests
+        run: python -m pytest --quiet
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q \
+            app \
+            run.py \
+            worker.py \
+            worker_healthcheck.py \
+            push_worker.py \
+            push_worker_healthcheck.py \
+            production_preflight.py \
+            data_hygiene.py
+
+      - name: Scan Python source
+        run: |
+          bandit --quiet --recursive \
+            app \
+            run.py \
+            worker.py \
+            worker_healthcheck.py \
+            push_worker.py \
+            push_worker_healthcheck.py \
+            production_preflight.py \
+            data_hygiene.py
+
+      - name: Audit Python dependencies
+        run: pip-audit --requirement requirements.txt
+
+  android:
+    name: Android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: m7_24
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36"
+
+      - name: Run Android checks
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon \
+            :app:testDebugUnitTest \
+            :app:lintDebug \
+            :app:assembleDebug
+
+      - name: Upload debug APK and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-and-reports
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            m7_24/app/build/outputs/apk/debug/app-debug.apk
+            m7_24/app/build/reports/
+            m7_24/app/build/test-results/
+
+  android-instrumented:
+    name: Android instrumented
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: m7_24
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install emulator image
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-36" \
+            "emulator" \
+            "system-images;android-35;google_apis;x86_64"
+
+      - name: Run instrumented tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          echo "no" | avdmanager create avd \
+            --force \
+            --name ci-api-35 \
+            --package "system-images;android-35;google_apis;x86_64" \
+            --device "pixel_6"
+
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm
+          fi
+          emulator \
+            -avd ci-api-35 \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect &
+          emulator_pid=$!
+          trap 'adb emu kill >/dev/null 2>&1 || kill "$emulator_pid" || true' EXIT
+
+          adb wait-for-device
+          timeout 360 bash -c \
+            'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" == "1" ]]; do sleep 5; done'
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell input keyevent 82
+
+          ./gradlew --no-daemon :app:connectedDebugAndroidTest
+
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-instrumented-reports
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            m7_24/app/build/reports/androidTests/
+            m7_24/app/build/outputs/androidTest-results/
+
+  container:
+    name: Backend container
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: b7_24
+    env:
+      TRUSTED_HOSTS: api.example.test
+      SECRET_KEY: ci-secret-key-with-more-than-thirty-two-characters
+      MOBILE_MIN_SUPPORTED_VERSION_CODE: "1"
+      MOBILE_LATEST_VERSION_CODE: "1"
+      MOBILE_UPDATE_URL: https://play.google.com/store/apps/details?id=com.yediyirmidort.worker
+      PRIVACY_POLICY_URL: https://example.test/privacy
+      VIDEO_CONSENT_VERSION: video-processing-v1
+      MONGO_URI: mongodb://ci:ci@mongo.example.test:27017/yedi_yirmi_dort?tls=true
+      MONGO_DB_NAME: yedi_yirmi_dort
+      SMS_PROVIDER: twilio
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD_HASH: ci-placeholder-password-hash
+      PUSH_PROVIDER: fcm
+      FCM_PROJECT_ID: ci-project
+      FCM_CREDENTIALS_FILE_HOST: /tmp/firebase-service-account.json
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose --file compose.yaml config --quiet
+
+      - name: Build backend image
+        run: docker build --pull --tag yedi-yirmi-dort-backend:ci .

@@ -1,0 +1,36 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+b7_24/instance/
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+google-services.json
+firebase-service-account*.json
+*.jks
+*.keystore
+*.p12
+*.pem
+
+# Android / Gradle
+.gradle/
+.kotlin/
+.idea/
+*.iml
+local.properties
+**/build/
+*.apk
+*.aab
+
+# Runtime output
+*.log
+*.pid
+*.tmp

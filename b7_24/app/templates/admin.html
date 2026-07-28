@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Yedi Yirmi Dört Yönetim</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin/admin.css') }}">
+</head>
+<body>
+    <main id="login-view" class="login-shell">
+        <section class="login-panel" aria-labelledby="login-title">
+            <div class="brand-mark">7/24</div>
+            <h1 id="login-title">İşveren Yönetimi</h1>
+            <p>Başvuruları, çalışan hizmetlerini ve işveren içeriklerini yönetin.</p>
+            <form id="login-form">
+                <label>
+                    Kullanıcı adı
+                    <input id="username" name="username" autocomplete="username" required>
+                </label>
+                <label>
+                    Şifre
+                    <input id="password" name="password" type="password" autocomplete="current-password" required>
+                </label>
+                <p id="login-error" class="form-error" role="alert"></p>
+                <button class="button primary wide" type="submit">Giriş yap</button>
+            </form>
+        </section>
+    </main>
+
+    <div id="admin-app" class="app-shell" hidden>
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-mark small">7/24</span>
+                <span>
+                    <strong>Yönetim</strong>
+                    <small id="sidebar-employer">İşveren</small>
+                </span>
+            </div>
+            <nav aria-label="Yönetim bölümleri">
+                <button class="nav-item active" data-view="overview">Genel Bakış</button>
+                <button class="nav-item" data-view="workers">Çalışanlar</button>
+                <button class="nav-item" data-view="processing">Video İşleme</button>
+                <button class="nav-item" data-view="jobs">İş İlanları</button>
+                <button class="nav-item" data-view="applications">Başvurular</button>
+                <button class="nav-item" data-view="questions">Çalışan Soruları</button>
+                <button class="nav-item" data-view="shuttle">Servis Talepleri</button>
+                <button class="nav-item" data-view="content">İçerik Yönetimi</button>
+                <button class="nav-item" data-view="hygiene">Veri Kalitesi</button>
+                <button class="nav-item" data-view="audit">Denetim Kaydı</button>
+            </nav>
+            <button id="logout-button" class="nav-item logout" type="button">Çıkış yap</button>
+        </aside>
+
+        <main class="workspace">
+            <header class="workspace-header">
+                <div>
+                    <p class="eyebrow" id="view-eyebrow">OPERASYON</p>
+                    <h1 id="view-title">Genel Bakış</h1>
+                </div>
+                <span id="employer-badge" class="employer-badge"></span>
+            </header>
+
+            <section id="loading-state" class="state-message" hidden>Veriler yükleniyor...</section>
+            <section id="error-state" class="state-message error" hidden></section>
+            <section id="view-root" aria-live="polite"></section>
+        </main>
+    </div>
+
+    <dialog id="worker-detail-dialog" class="dialog worker-detail-dialog">
+        <header class="dialog-header">
+            <div>
+                <p class="eyebrow">ÇALIŞAN PROFİLİ</p>
+                <h2 id="worker-detail-title">Çalışan detayı</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-dialog="worker-detail-dialog" aria-label="Kapat">×</button>
+        </header>
+        <div id="worker-detail-body" class="dialog-body" aria-live="polite"></div>
+        <footer class="dialog-actions">
+            <button class="button secondary" type="button" data-close-dialog="worker-detail-dialog">Kapat</button>
+        </footer>
+    </dialog>
+
+    <dialog id="phone-correction-dialog" class="dialog compact">
+        <form id="phone-correction-form" method="dialog">
+            <header class="dialog-header">
+                <div>
+                    <p class="eyebrow">VERİ KALİTESİ</p>
+                    <h2>Telefonu düzelt</h2>
+                </div>
+                <button class="icon-button" type="button" data-close-dialog="phone-correction-dialog" aria-label="Kapat">×</button>
+            </header>
+            <div class="dialog-body">
+                <p id="phone-correction-context" class="helper-text"></p>
+                <label>
+                    Doğru telefon numarası
+                    <input id="corrected-phone" type="tel" autocomplete="off" placeholder="+90 555 111 22 33" required>
+                </label>
+                <p class="helper-text">Numara doğrulanmış sayılmaz. Çalışan ilk girişinde SMS kodunu yine doğrulamalıdır.</p>
+            </div>
+            <p id="phone-correction-error" class="form-error" role="alert"></p>
+            <footer class="dialog-actions">
+                <button class="button secondary" type="button" data-close-dialog="phone-correction-dialog">Vazgeç</button>
+                <button class="button primary" type="submit">Telefonu güncelle</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog id="legacy-cleanup-dialog" class="dialog compact">
+        <form id="legacy-cleanup-form" method="dialog">
+            <header class="dialog-header">
+                <div>
+                    <p class="eyebrow">VERİ KALİTESİ</p>
+                    <h2>Eski kaydı temizle</h2>
+                </div>
+                <button class="icon-button" type="button" data-close-dialog="legacy-cleanup-dialog" aria-label="Kapat">×</button>
+            </header>
+            <div class="dialog-body">
+                <p id="legacy-cleanup-context"></p>
+                <p class="helper-text">Kişisel kayıtlar silinir; mevcut başvurular aday bilgileri kaldırılarak anonim tutulur. Bu işlem geri alınamaz.</p>
+                <label>
+                    Onaylamak için TEMIZLE yazın
+                    <input id="legacy-cleanup-confirmation" autocomplete="off" pattern="TEMIZLE" required>
+                </label>
+            </div>
+            <p id="legacy-cleanup-error" class="form-error" role="alert"></p>
+            <footer class="dialog-actions">
+                <button class="button secondary" type="button" data-close-dialog="legacy-cleanup-dialog">Vazgeç</button>
+                <button class="button danger" type="submit">Kaydı temizle</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog id="item-dialog" class="dialog">
+        <form id="item-form" method="dialog">
+            <header class="dialog-header">
+                <div>
+                    <p class="eyebrow">İÇERİK</p>
+                    <h2 id="item-dialog-title">İçerik ekle</h2>
+                </div>
+                <button class="icon-button" type="button" data-close-dialog="item-dialog" aria-label="Kapat">×</button>
+            </header>
+            <div id="item-form-fields" class="dialog-body"></div>
+            <p id="item-form-error" class="form-error" role="alert"></p>
+            <footer class="dialog-actions">
+                <button class="button secondary" type="button" data-close-dialog="item-dialog">Vazgeç</button>
+                <button class="button primary" type="submit">Kaydet</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog id="decision-dialog" class="dialog compact">
+        <form id="decision-form" method="dialog">
+            <header class="dialog-header">
+                <div>
+                    <p class="eyebrow">DURUM</p>
+                    <h2 id="decision-title">Durumu güncelle</h2>
+                </div>
+                <button class="icon-button" type="button" data-close-dialog="decision-dialog" aria-label="Kapat">×</button>
+            </header>
+            <div class="dialog-body">
+                <label>
+                    Yeni durum
+                    <select id="decision-status" required></select>
+                </label>
+                <label>
+                    İşveren notu
+                    <textarea id="decision-note" rows="4" maxlength="1000"></textarea>
+                </label>
+                <section id="application-interview-fields" class="editor-section" hidden>
+                    <div class="editor-section-header">
+                        <h3>Görüşme planı</h3>
+                    </div>
+                    <div class="field-grid">
+                        <label>
+                            Tarih ve saat
+                            <input id="interview-scheduled-at" type="datetime-local">
+                        </label>
+                        <label>
+                            Görüşme türü
+                            <select id="interview-type">
+                                <option value="onsite">Yüz yüze</option>
+                                <option value="phone">Telefon</option>
+                                <option value="video">Video görüşme</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label>
+                        Konum / bağlantı bilgisi
+                        <input id="interview-location" maxlength="300">
+                    </label>
+                    <label>
+                        Çalışana görüşme notu
+                        <textarea id="interview-note" rows="3" maxlength="1000"></textarea>
+                    </label>
+                    <label id="interview-clear-label" class="checkbox-row" hidden>
+                        <input id="interview-clear" type="checkbox">
+                        Mevcut görüşme planını kaldır
+                    </label>
+                    <p class="helper-text">Tarih girilmezse mevcut plan korunur. Yüz yüze görüşmelerde konum zorunludur.</p>
+                </section>
+            </div>
+            <p id="decision-error" class="form-error" role="alert"></p>
+            <footer class="dialog-actions">
+                <button class="button secondary" type="button" data-close-dialog="decision-dialog">Vazgeç</button>
+                <button class="button primary" type="submit">Güncelle</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog id="question-dialog" class="dialog compact">
+        <form id="question-form" method="dialog">
+            <header class="dialog-header">
+                <div>
+                    <p class="eyebrow">ÇALIŞAN DESTEĞİ</p>
+                    <h2>Soruyu yanıtla</h2>
+                </div>
+                <button class="icon-button" type="button" data-close-dialog="question-dialog" aria-label="Kapat">×</button>
+            </header>
+            <div class="dialog-body">
+                <div id="question-context" class="question-context"></div>
+                <label>
+                    İşveren yanıtı
+                    <textarea id="question-answer" rows="6" maxlength="5000" required></textarea>
+                </label>
+            </div>
+            <p id="question-error" class="form-error" role="alert"></p>
+            <footer class="dialog-actions">
+                <button class="button secondary" type="button" data-close-dialog="question-dialog">Vazgeç</button>
+                <button class="button primary" type="submit">Yanıtı gönder</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog id="invite-dialog" class="dialog compact">
+        <form id="invite-form" method="dialog">
+            <header class="dialog-header">
+                <div>
+                    <p class="eyebrow">ÇALIŞAN</p>
+                    <h2>Telefonla davet et</h2>
+                </div>
+                <button class="icon-button" type="button" data-close-dialog="invite-dialog" aria-label="Kapat">×</button>
+            </header>
+            <div class="dialog-body">
+                <label>
+                    Telefon numarası
+                    <input id="invite-phone" type="tel" autocomplete="tel" placeholder="+90 555 111 22 33" required>
+                </label>
+                <p class="helper-text">Çalışan uygulamaya bu numarayla giriş yaptığında işveren hesabınıza bağlanır.</p>
+            </div>
+            <p id="invite-error" class="form-error" role="alert"></p>
+            <footer class="dialog-actions">
+                <button class="button secondary" type="button" data-close-dialog="invite-dialog">Vazgeç</button>
+                <button class="button primary" type="submit">Davet oluştur</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog id="job-dialog" class="dialog">
+        <form id="job-form" method="dialog">
+            <header class="dialog-header">
+                <div>
+                    <p class="eyebrow">İŞ İLANI</p>
+                    <h2 id="job-dialog-title">İlan ekle</h2>
+                </div>
+                <button class="icon-button" type="button" data-close-dialog="job-dialog" aria-label="Kapat">×</button>
+            </header>
+            <div class="dialog-body">
+                <div class="field-grid">
+                    <label>
+                        İlan başlığı
+                        <input id="job-title" maxlength="160" required>
+                    </label>
+                    <label>
+                        Şirket
+                        <input id="job-company" maxlength="160" required>
+                    </label>
+                    <label>
+                        Konum
+                        <input id="job-location" maxlength="160" required>
+                    </label>
+                    <label>
+                        Açık pozisyon
+                        <input id="job-openings" type="number" min="1" max="10000" value="1" required>
+                    </label>
+                    <label>
+                        Çalışma şekli
+                        <select id="job-employment-type" required>
+                            <option value="full_time">Tam zamanlı</option>
+                            <option value="part_time">Yarı zamanlı</option>
+                            <option value="temporary">Dönemsel</option>
+                            <option value="contract">Sözleşmeli</option>
+                        </select>
+                    </label>
+                    <label>
+                        Vardiya
+                        <select id="job-shift" required>
+                            <option value="day">Gündüz</option>
+                            <option value="night">Gece</option>
+                            <option value="rotating">Dönüşümlü</option>
+                            <option value="flexible">Esnek</option>
+                        </select>
+                    </label>
+                    <label>
+                        Durum
+                        <select id="job-status" required>
+                            <option value="draft">Taslak</option>
+                            <option value="published">Yayında</option>
+                            <option value="closed">Kapalı</option>
+                        </select>
+                    </label>
+                </div>
+                <label>
+                    Açıklama
+                    <textarea id="job-description" rows="5" maxlength="5000" required></textarea>
+                </label>
+                <label>
+                    Zorunlu beceriler
+                    <input id="job-required-skills" maxlength="1000" placeholder="kaynak, iş güvenliği, teknik beceri" required>
+                    <span class="helper-text">Becerileri virgülle ayırın.</span>
+                </label>
+                <label>
+                    Tercih edilen beceriler
+                    <input id="job-optional-skills" maxlength="1000" placeholder="vardiya uyumu, araç kullanma">
+                    <span class="helper-text">Becerileri virgülle ayırın.</span>
+                </label>
+            </div>
+            <p id="job-form-error" class="form-error dialog-form-error" role="alert"></p>
+            <footer class="dialog-actions">
+                <button class="button secondary" type="button" data-close-dialog="job-dialog">Vazgeç</button>
+                <button class="button primary" type="submit">Kaydet</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="{{ url_for('static', filename='admin/admin.js') }}" defer></script>
+</body>
+</html>

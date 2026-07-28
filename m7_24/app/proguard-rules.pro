@@ -1,0 +1,2 @@
+-keepattributes Signature,*Annotation*
+-keep class com.example.m7_24.api.** { *; }

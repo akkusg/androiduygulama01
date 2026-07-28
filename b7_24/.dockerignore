@@ -1,0 +1,16 @@
+.DS_Store
+.env*
+.git
+.gitignore
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+*.pem
+*.key
+*.p12
+*.pfx
+firebase-service-account*.json
+*-firebase-adminsdk-*.json
+instance
+tests
