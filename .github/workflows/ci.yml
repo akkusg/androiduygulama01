@@ -32,7 +32,7 @@ jobs:
         working-directory: b7_24
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -92,7 +92,7 @@ jobs:
         working-directory: m7_24
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -135,7 +135,7 @@ jobs:
         working-directory: m7_24
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -222,7 +222,7 @@ jobs:
       FCM_CREDENTIALS_FILE_HOST: /tmp/firebase-service-account.json
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate Compose configuration
         run: docker compose --file compose.yaml config --quiet
