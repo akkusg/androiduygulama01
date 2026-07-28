@@ -101,9 +101,13 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Install Android SDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install Android platform
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-36"
 
       - name: Run Android checks
@@ -144,9 +148,13 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+
       - name: Install emulator image
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager \
             "platforms;android-36" \
             "emulator" \
