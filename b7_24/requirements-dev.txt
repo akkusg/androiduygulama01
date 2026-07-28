@@ -41,7 +41,7 @@ flatbuffers==25.12.19
     # via onnxruntime
 fsspec==2026.6.0
     # via huggingface-hub
-google-api-core==2.33.0
+google-api-core[grpc]==2.33.0
     # via
     #   firebase-admin
     #   google-cloud-core
@@ -78,7 +78,7 @@ grpcio==1.83.0
     #   grpcio-status
 grpcio-status==1.83.0
     # via google-api-core
-gunicorn==23.0.0
+gunicorn==26.0.0
     # via -r requirements.in
 h11==0.16.0
     # via httpcore
@@ -90,7 +90,7 @@ hpack==4.2.0
     # via h2
 httpcore==1.0.9
     # via httpx
-httpx==0.28.1
+httpx[http2]==0.28.1
     # via
     #   firebase-admin
     #   huggingface-hub
@@ -152,7 +152,7 @@ pycparser==3.0
     # via cffi
 pygments==2.20.0
     # via pytest
-pyjwt==2.13.0
+pyjwt[crypto]==2.13.0
     # via firebase-admin
 pymongo==4.17.0
     # via -r requirements.in
@@ -169,8 +169,6 @@ requests==2.34.2
     #   cachecontrol
     #   google-api-core
     #   google-cloud-storage
-setuptools==83.0.0
-    # via ctranslate2
 tokenizers==0.23.1
     # via faster-whisper
 tqdm==4.70.0
