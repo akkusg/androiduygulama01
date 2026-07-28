@@ -148,51 +148,24 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          log-accepted-android-sdk-licenses: false
-
-      - name: Install emulator image
+      - name: Enable KVM
         run: |
-          sdkmanager \
-            "platforms;android-36" \
-            "emulator" \
-            "system-images;android-35;google_apis;x86_64"
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
       - name: Run instrumented tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          chmod +x gradlew
-          echo "no" | avdmanager create avd \
-            --force \
-            --name ci-api-35 \
-            --package "system-images;android-35;google_apis;x86_64" \
-            --device "pixel_6"
-
-          if [[ -e /dev/kvm ]]; then
-            sudo chmod 666 /dev/kvm
-          fi
-          "${ANDROID_SDK_ROOT}/emulator/emulator" \
-            -avd ci-api-35 \
-            -no-window \
-            -no-audio \
-            -no-boot-anim \
-            -no-snapshot \
-            -gpu swiftshader_indirect &
-          emulator_pid=$!
-          trap 'adb emu kill >/dev/null 2>&1 || kill "$emulator_pid" || true' EXIT
-
-          timeout 120 adb wait-for-device
-          timeout 360 bash -c \
-            'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" == "1" ]]; do sleep 5; done'
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
-          adb shell input keyevent 82
-
-          ./gradlew --no-daemon :app:connectedDebugAndroidTest
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          working-directory: m7_24
+          emulator-boot-timeout: 600
+          disable-animations: true
+          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
 
       - name: Upload instrumented test reports
         if: always()
