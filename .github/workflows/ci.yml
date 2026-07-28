@@ -174,7 +174,7 @@ jobs:
           if [[ -e /dev/kvm ]]; then
             sudo chmod 666 /dev/kvm
           fi
-          emulator \
+          "${ANDROID_SDK_ROOT}/emulator/emulator" \
             -avd ci-api-35 \
             -no-window \
             -no-audio \
@@ -184,7 +184,7 @@ jobs:
           emulator_pid=$!
           trap 'adb emu kill >/dev/null 2>&1 || kill "$emulator_pid" || true' EXIT
 
-          adb wait-for-device
+          timeout 120 adb wait-for-device
           timeout 360 bash -c \
             'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" == "1" ]]; do sleep 5; done'
           adb shell settings put global window_animation_scale 0
