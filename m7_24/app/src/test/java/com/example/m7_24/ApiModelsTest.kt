@@ -120,7 +120,12 @@ class ApiModelsTest {
                     "scheduledAt": "2026-08-01T07:30:00+00:00",
                     "type": "onsite",
                     "location": "ACME Kocaeli Fabrikası",
-                    "note": "Kimliğinizi getirin."
+                    "note": "Kimliğinizi getirin.",
+                    "response": {
+                      "status": "confirmed",
+                      "note": "",
+                      "respondedAt": "2026-07-30T08:00:00+00:00"
+                    }
                   }
                 }
               ],
@@ -162,6 +167,11 @@ class ApiModelsTest {
         assertEquals(
             "ACME Kocaeli Fabrikası",
             dashboard.jobApplications.single().interview?.location,
+        )
+        assertEquals(
+            "confirmed",
+            dashboard.jobApplications.single()
+                .interview?.response?.status,
         )
         assertEquals(
             listOf("kaynak", "iş güvenliği"),

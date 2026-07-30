@@ -476,6 +476,16 @@ tbody tr:last-child td {
     white-space: nowrap;
 }
 
+.interview-response-summary {
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+}
+
+.interview-response-summary p {
+    color: var(--muted);
+    margin: 4px 0 0;
+}
+
 .cell-title.question-copy {
     max-width: 420px;
     line-height: 1.4;

@@ -142,6 +142,28 @@ def serialize_job_posting(posting: dict) -> dict:
 
 def serialize_job_application(application: dict) -> dict:
     interview = application.get("interview")
+    serialized_interview = None
+    if interview:
+        response = interview.get("response")
+        serialized_interview = {
+            **interview,
+            "scheduledAt": serialize_datetime(
+                interview.get("scheduledAt")
+            ),
+            "updatedAt": serialize_datetime(
+                interview.get("updatedAt")
+            ),
+            "response": (
+                {
+                    **response,
+                    "respondedAt": serialize_datetime(
+                        response.get("respondedAt")
+                    ),
+                }
+                if response
+                else None
+            ),
+        }
     return {
         "id": serialize_object_id(application.get("_id")),
         "userId": serialize_object_id(application.get("userId")),
@@ -153,19 +175,7 @@ def serialize_job_application(application: dict) -> dict:
         "status": application.get("status"),
         "coverNote": application.get("coverNote"),
         "hiringSlot": application.get("hiringSlot"),
-        "interview": (
-            {
-                **interview,
-                "scheduledAt": serialize_datetime(
-                    interview.get("scheduledAt")
-                ),
-                "updatedAt": serialize_datetime(
-                    interview.get("updatedAt")
-                ),
-            }
-            if interview
-            else None
-        ),
+        "interview": serialized_interview,
         "withdrawnAt": serialize_datetime(
             application.get("withdrawnAt")
         ),

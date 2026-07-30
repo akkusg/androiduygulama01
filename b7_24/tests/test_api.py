@@ -2154,6 +2154,7 @@ def test_worker_can_apply_to_recommended_job_and_employer_can_update_status(clie
         "location": "ACME Kocaeli Fabrikası",
         "note": "Güvenlik girişinde kimlik gösterin.",
         "updatedAt": updated_application["interview"]["updatedAt"],
+        "response": None,
     }
 
     application_dashboard = client.get(
@@ -2168,6 +2169,54 @@ def test_worker_can_apply_to_recommended_job_and_employer_can_update_status(clie
     assert (
         dashboard_application["interview"]["scheduledAt"]
         == interview_at.isoformat()
+    )
+
+    invalid_interview_response = client.post(
+        f"/api/users/{user_id}/job-applications/"
+        f"{application['id']}/interview-response",
+        json={"status": "maybe"},
+        headers={"Idempotency-Key": "invalid-interview-response"},
+    )
+    non_string_interview_response = client.post(
+        f"/api/users/{user_id}/job-applications/"
+        f"{application['id']}/interview-response",
+        json={"status": ["confirmed"]},
+        headers={
+            "Idempotency-Key": "non-string-interview-response"
+        },
+    )
+    declined_without_note = client.post(
+        f"/api/users/{user_id}/job-applications/"
+        f"{application['id']}/interview-response",
+        json={"status": "declined"},
+        headers={"Idempotency-Key": "decline-without-note"},
+    )
+    confirmed_interview = client.post(
+        f"/api/users/{user_id}/job-applications/"
+        f"{application['id']}/interview-response",
+        json={"status": "confirmed"},
+        headers={"Idempotency-Key": "confirm-interview"},
+    )
+    confirmed_interview_replay = client.post(
+        f"/api/users/{user_id}/job-applications/"
+        f"{application['id']}/interview-response",
+        json={"status": "confirmed"},
+        headers={"Idempotency-Key": "confirm-interview"},
+    )
+    assert invalid_interview_response.status_code == 400
+    assert non_string_interview_response.status_code == 400
+    assert declined_without_note.status_code == 400
+    assert confirmed_interview.status_code == 200
+    confirmed_response = confirmed_interview.get_json()[
+        "jobApplication"
+    ]["interview"]["response"]
+    assert confirmed_response["status"] == "confirmed"
+    assert confirmed_response["note"] == ""
+    assert confirmed_response["respondedAt"]
+    assert (
+        confirmed_interview_replay.get_json()["jobApplication"]
+        ["interview"]["response"]
+        == confirmed_response
     )
 
     rescheduled_at = interview_at + timedelta(days=1)
@@ -2200,11 +2249,54 @@ def test_worker_can_apply_to_recommended_job_and_employer_can_update_status(clie
         == "video"
     )
     assert (
+        rescheduled.get_json()["jobApplication"]["interview"]
+        ["response"]
+        is None
+    )
+    assert (
         rescheduled.get_json()["jobApplication"]
         ["statusHistory"][-1]["note"]
         == "Görüşme planı güncellendi."
     )
     assert invalid_interview.status_code == 400
+
+    declined_interview = client.post(
+        f"/api/users/{user_id}/job-applications/"
+        f"{application['id']}/interview-response",
+        json={
+            "status": "declined",
+            "note": "Bu saatte vardiyadayım, yeniden planlayabilir miyiz?",
+        },
+        headers={"Idempotency-Key": "decline-rescheduled-interview"},
+    )
+    assert declined_interview.status_code == 200
+    declined_response = declined_interview.get_json()[
+        "jobApplication"
+    ]["interview"]["response"]
+    assert declined_response["status"] == "declined"
+    assert (
+        declined_response["note"]
+        == "Bu saatte vardiyadayım, yeniden planlayabilir miyiz?"
+    )
+    employer_after_response = client.get(
+        "/api/employers/acme/job-applications"
+    ).get_json()["jobApplications"][0]
+    assert (
+        employer_after_response["interview"]["response"]
+        == declined_response
+    )
+
+    another_user = client.post(
+        "/api/users",
+        json={"phone": "+905554445501"},
+    ).get_json()["user"]
+    foreign_interview_response = client.post(
+        f"/api/users/{another_user['id']}/job-applications/"
+        f"{application['id']}/interview-response",
+        json={"status": "confirmed"},
+        headers={"Idempotency-Key": "foreign-interview-response"},
+    )
+    assert foreign_interview_response.status_code == 404
 
     user_payload = client.get(
         f"/api/users/{user_id}/job-applications"
@@ -2214,6 +2306,10 @@ def test_worker_can_apply_to_recommended_job_and_employer_can_update_status(clie
     assert (
         user_applications[0]["interview"]["scheduledAt"]
         == rescheduled_at.isoformat()
+    )
+    assert (
+        user_applications[0]["interview"]["response"]["status"]
+        == "declined"
     )
     assert user_payload["pagination"]["total"] == 1
     cleared_interview = client.patch(
@@ -2234,10 +2330,6 @@ def test_worker_can_apply_to_recommended_job_and_employer_can_update_status(clie
         == "Görüşme planı kaldırıldı."
     )
 
-    another_user = client.post(
-        "/api/users",
-        json={"phone": "+905554445501"},
-    ).get_json()["user"]
     foreign_withdrawal = client.post(
         f"/api/users/{another_user['id']}/job-applications/"
         f"{application['id']}/withdraw",

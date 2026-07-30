@@ -363,6 +363,9 @@ class AppInstrumentedTest {
     @Test
     fun jobApplicationHistoryShowsLatestEmployerNote() {
         var withdrawnApplicationId = ""
+        var interviewResponseApplicationId = ""
+        var interviewResponseStatus = ""
+        var interviewResponseNote = ""
         composeRule.setContent {
             M7_24Theme {
                 JobApplicationsSection(
@@ -394,6 +397,16 @@ class AppInstrumentedTest {
                     onWithdraw = {
                         withdrawnApplicationId = it
                     },
+                    onInterviewResponse = {
+                            applicationId,
+                            status,
+                            note,
+                        ->
+                        interviewResponseApplicationId =
+                            applicationId
+                        interviewResponseStatus = status
+                        interviewResponseNote = note
+                    },
                 )
             }
         }
@@ -420,6 +433,36 @@ class AppInstrumentedTest {
         composeRule.onNodeWithText(
             "10 dakika önce hazır olun."
         ).assertIsDisplayed()
+        composeRule.onNodeWithTag(
+            "job_application_interview_confirm_application-1"
+        ).performClick()
+        composeRule.onNodeWithTag(
+            "job_application_interview_response_confirm"
+        ).performClick()
+        composeRule.runOnIdle {
+            assertEquals(
+                "application-1",
+                interviewResponseApplicationId,
+            )
+            assertEquals("confirmed", interviewResponseStatus)
+            assertEquals("", interviewResponseNote)
+        }
+        composeRule.onNodeWithTag(
+            "job_application_interview_decline_application-1"
+        ).performClick()
+        composeRule.onNodeWithTag(
+            "job_application_interview_response_confirm"
+        ).assertIsNotEnabled()
+        composeRule.onNodeWithTag(
+            "job_application_interview_response_note"
+        ).performTextInput("Vardiyadayım.")
+        composeRule.onNodeWithTag(
+            "job_application_interview_response_confirm"
+        ).assertIsEnabled().performClick()
+        composeRule.runOnIdle {
+            assertEquals("declined", interviewResponseStatus)
+            assertEquals("Vardiyadayım.", interviewResponseNote)
+        }
         composeRule.onNodeWithTag(
             "job_application_withdraw_application-1"
         ).performClick()

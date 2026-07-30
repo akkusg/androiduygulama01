@@ -299,6 +299,17 @@ def test_worker_account_deletion_erases_personal_data_and_revokes_session(
                         "changedAt": now,
                     }
                 ],
+                "interview": {
+                    "scheduledAt": now,
+                    "type": "onsite",
+                    "location": "ACME",
+                    "response": {
+                        "status": "declined",
+                        "note": "private interview response",
+                        "respondedAt": now,
+                    },
+                    "updatedAt": now,
+                },
                 "createdAt": now,
                 "updatedAt": now,
             }
@@ -378,6 +389,7 @@ def test_worker_account_deletion_erases_personal_data_and_revokes_session(
             == "submitted"
         )
         assert "note" not in application["statusHistory"][0]
+        assert "response" not in application["interview"]
         deletion = db.accountDeletionRecords.find_one(
             {"_id": user_id}
         )

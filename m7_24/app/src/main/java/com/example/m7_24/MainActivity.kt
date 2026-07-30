@@ -64,6 +64,7 @@ import com.example.m7_24.api.AssessmentAnswerRequest
 import com.example.m7_24.api.CompleteAssessmentRequest
 import com.example.m7_24.api.CandidateProfileDto
 import com.example.m7_24.api.DashboardResponse
+import com.example.m7_24.api.InterviewResponseRequest
 import com.example.m7_24.api.JobApplicationDto
 import com.example.m7_24.api.JobApplicationRequest
 import com.example.m7_24.api.JobDto
@@ -1374,6 +1375,9 @@ fun DashboardScreen(
     var withdrawingJobApplicationId by remember {
         mutableStateOf<String?>(null)
     }
+    var respondingInterviewApplicationId by remember {
+        mutableStateOf<String?>(null)
+    }
     var activeWorkerActionKey by remember {
         mutableStateOf<String?>(null)
     }
@@ -1700,6 +1704,62 @@ fun DashboardScreen(
                                 data?.jobApplications.orEmpty(),
                             withdrawingApplicationId =
                                 withdrawingJobApplicationId,
+                            respondingInterviewApplicationId =
+                                respondingInterviewApplicationId,
+                            onInterviewResponse = interviewResponse@ {
+                                    applicationId,
+                                    responseStatus,
+                                    note,
+                                ->
+                                val currentUserId =
+                                    userId ?: return@interviewResponse
+                                if (
+                                    respondingInterviewApplicationId !=
+                                    null
+                                ) {
+                                    return@interviewResponse
+                                }
+                                coroutineScope.launch {
+                                    respondingInterviewApplicationId =
+                                        applicationId
+                                    jobActionMessage = null
+                                    try {
+                                        BackendClient.api
+                                            .respondToInterview(
+                                                currentUserId,
+                                                applicationId,
+                                                InterviewResponseRequest(
+                                                    status =
+                                                        responseStatus,
+                                                    note = note,
+                                                ),
+                                                BackendClient
+                                                    .newIdempotencyKey(),
+                                            )
+                                        jobActionMessage =
+                                            if (
+                                                responseStatus ==
+                                                "confirmed"
+                                            ) {
+                                                "Görüşme katılımınız " +
+                                                    "onaylandı."
+                                            } else {
+                                                "Katılamama bildiriminiz " +
+                                                    "işverene iletildi."
+                                            }
+                                        refreshTick += 1
+                                    } catch (error: Exception) {
+                                        jobActionMessage =
+                                            error.toUserMessage(
+                                                "Görüşme yanıtı " +
+                                                    "gönderilemedi."
+                                            )
+                                    } finally {
+                                        respondingInterviewApplicationId =
+                                            null
+                                    }
+                                }
+                            },
                             onWithdraw = { applicationId ->
                                 val currentUserId =
                                     userId ?: return@JobApplicationsSection
@@ -3030,10 +3090,19 @@ fun HubSummaryCard(title: String, body: String) {
 internal fun JobApplicationsSection(
     applications: List<JobApplicationDto>,
     withdrawingApplicationId: String? = null,
+    respondingInterviewApplicationId: String? = null,
+    onInterviewResponse: (String, String, String) -> Unit =
+        { _, _, _ -> },
     onWithdraw: (String) -> Unit = {},
 ) {
     var pendingWithdrawalId by remember {
         mutableStateOf<String?>(null)
+    }
+    var pendingInterviewResponse by remember {
+        mutableStateOf<Pair<String, String>?>(null)
+    }
+    var interviewResponseNote by remember {
+        mutableStateOf("")
     }
     Text(
         text = "Başvurularım",
@@ -3160,6 +3229,107 @@ internal fun JobApplicationsSection(
                                             .onSurfaceVariant,
                                     )
                                 }
+                            val responseStatus =
+                                interview.response?.status
+                            if (!responseStatus.isNullOrBlank()) {
+                                Spacer(
+                                    modifier = Modifier.height(8.dp)
+                                )
+                                Text(
+                                    text = if (
+                                        responseStatus == "confirmed"
+                                    ) {
+                                        "Katılımınızı onayladınız."
+                                    } else {
+                                        "Katılamayacağınızı bildirdiniz."
+                                    },
+                                    style = MaterialTheme.typography
+                                        .labelLarge,
+                                    color = if (
+                                        responseStatus == "confirmed"
+                                    ) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.error
+                                    },
+                                    modifier = Modifier.testTag(
+                                        "job_application_interview_" +
+                                            "response_" +
+                                            application.id.orEmpty()
+                                    ),
+                                )
+                                interview.response?.note
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?.let { responseNote ->
+                                        Text(
+                                            text = responseNote,
+                                            style = MaterialTheme.typography
+                                                .bodySmall,
+                                            color = MaterialTheme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                        )
+                                    }
+                            }
+                            val applicationId = application.id
+                            if (!applicationId.isNullOrBlank()) {
+                                if (responseStatus != "confirmed") {
+                                    Spacer(
+                                        modifier =
+                                            Modifier.height(10.dp)
+                                    )
+                                    Button(
+                                        onClick = {
+                                            interviewResponseNote = ""
+                                            pendingInterviewResponse =
+                                                applicationId to
+                                                "confirmed"
+                                        },
+                                        enabled =
+                                            respondingInterviewApplicationId ==
+                                                null &&
+                                                withdrawingApplicationId ==
+                                                null,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag(
+                                                "job_application_" +
+                                                    "interview_confirm_" +
+                                                    applicationId
+                                            ),
+                                    ) {
+                                        Text("Katılacağım")
+                                    }
+                                }
+                                if (responseStatus != "declined") {
+                                    Spacer(
+                                        modifier =
+                                            Modifier.height(8.dp)
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            interviewResponseNote = ""
+                                            pendingInterviewResponse =
+                                                applicationId to
+                                                "declined"
+                                        },
+                                        enabled =
+                                            respondingInterviewApplicationId ==
+                                                null &&
+                                                withdrawingApplicationId ==
+                                                null,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag(
+                                                "job_application_" +
+                                                    "interview_decline_" +
+                                                    applicationId
+                                            ),
+                                    ) {
+                                        Text("Katılamayacağım")
+                                    }
+                                }
+                            }
                         }
                     }
                 val applicationId = application.id
@@ -3174,7 +3344,8 @@ internal fun JobApplicationsSection(
                             pendingWithdrawalId = applicationId
                         },
                         enabled =
-                            withdrawingApplicationId == null,
+                            withdrawingApplicationId == null &&
+                                respondingInterviewApplicationId == null,
                         colors =
                             ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme
@@ -3235,6 +3406,90 @@ internal fun JobApplicationsSection(
                 TextButton(
                     onClick = {
                         pendingWithdrawalId = null
+                    }
+                ) {
+                    Text("Vazgeç")
+                }
+            },
+        )
+    }
+    pendingInterviewResponse?.let { request ->
+        val applicationId = request.first
+        val responseStatus = request.second
+        val declining = responseStatus == "declined"
+        AlertDialog(
+            onDismissRequest = {
+                pendingInterviewResponse = null
+                interviewResponseNote = ""
+            },
+            title = {
+                Text(
+                    if (declining) {
+                        "Görüşmeye katılamayacağım"
+                    } else {
+                        "Görüşmeye katılacağım"
+                    }
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        if (declining) {
+                            "İşverenin yeni bir plan yapabilmesi için " +
+                                "kısa bir gerekçe yazın."
+                        } else {
+                            "Planlanan tarih ve saatte görüşmeye " +
+                                "katılacağınızı onaylayın."
+                        }
+                    )
+                    if (declining) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = interviewResponseNote,
+                            onValueChange = {
+                                interviewResponseNote =
+                                    it.take(500)
+                            },
+                            label = { Text("Gerekçe") },
+                            minLines = 2,
+                            maxLines = 4,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(
+                                    "job_application_interview_" +
+                                        "response_note"
+                                ),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val note = interviewResponseNote.trim()
+                        pendingInterviewResponse = null
+                        interviewResponseNote = ""
+                        onInterviewResponse(
+                            applicationId,
+                            responseStatus,
+                            note,
+                        )
+                    },
+                    enabled =
+                        !declining ||
+                            interviewResponseNote.isNotBlank(),
+                    modifier = Modifier.testTag(
+                        "job_application_interview_response_confirm"
+                    ),
+                ) {
+                    Text("Gönder")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingInterviewResponse = null
+                        interviewResponseNote = ""
                     }
                 ) {
                     Text("Vazgeç")

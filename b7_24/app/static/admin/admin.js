@@ -1556,6 +1556,22 @@ function openApplicationDecision(application) {
         application.interview?.location || "";
     document.getElementById("interview-note").value =
         application.interview?.note || "";
+    const interviewResponse =
+        application.interview?.response;
+    const responseSummary = document.getElementById(
+        "interview-response-summary",
+    );
+    responseSummary.hidden = !interviewResponse;
+    document.getElementById(
+        "interview-response-status",
+    ).textContent = interviewResponse?.status === "confirmed"
+        ? "Çalışan görüşmeye katılacak"
+        : "Çalışan görüşmeye katılamayacak";
+    const responseNote = document.getElementById(
+        "interview-response-note",
+    );
+    responseNote.textContent = interviewResponse?.note || "";
+    responseNote.hidden = !interviewResponse?.note;
     document.getElementById("interview-clear").checked = false;
     document.getElementById("interview-clear-label").hidden =
         !application.interview;
@@ -1899,6 +1915,13 @@ function applicationTable(items, actionable) {
                                 ${statusBadge(item.status)}
                                 ${item.interview?.scheduledAt ? `
                                     <span class="cell-subtitle">Görüşme: ${formatDate(item.interview.scheduledAt)}</span>
+                                    ${item.interview.response ? `
+                                        <span class="cell-subtitle">
+                                            Yanıt: ${item.interview.response.status === "confirmed"
+                                                ? "Katılacak"
+                                                : "Katılamayacak"}
+                                        </span>
+                                    ` : ""}
                                 ` : ""}
                             </td>
                             <td>${formatDate(item.createdAt)}</td>

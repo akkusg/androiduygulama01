@@ -68,6 +68,11 @@ data class JobApplicationRequest(
     val coverNote: String = ""
 )
 
+data class InterviewResponseRequest(
+    val status: String,
+    val note: String = "",
+)
+
 data class ProfileReviewRequest(
     val name: String,
 )
@@ -380,7 +385,14 @@ data class JobApplicationInterviewDto(
     val type: String? = null,
     val location: String? = null,
     val note: String? = null,
+    val response: JobApplicationInterviewResponseDto? = null,
     val updatedAt: String? = null
+)
+
+data class JobApplicationInterviewResponseDto(
+    val status: String? = null,
+    val note: String? = null,
+    val respondedAt: String? = null,
 )
 
 data class JobApplicationStatusHistoryDto(

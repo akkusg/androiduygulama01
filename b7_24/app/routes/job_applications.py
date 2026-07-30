@@ -41,6 +41,7 @@ APPLICATION_STATUS_TRANSITIONS = {
 }
 INTERVIEW_APPLICATION_STATUSES = {"reviewing", "shortlisted"}
 INTERVIEW_TYPES = {"onsite", "phone", "video"}
+INTERVIEW_RESPONSE_STATUSES = {"confirmed", "declined"}
 
 
 @job_applications_bp.post("/api/users/<user_id>/job-applications")
@@ -210,6 +211,95 @@ def withdraw_user_job_application(
     )
     if result.modified_count != 1:
         raise Conflict("Job application changed concurrently")
+    updated = db.jobApplications.find_one(
+        {"_id": application["_id"]}
+    )
+    return jsonify(
+        {"jobApplication": serialize_job_application(updated)}
+    )
+
+
+@job_applications_bp.post(
+    "/api/users/<user_id>/job-applications/"
+    "<application_id>/interview-response"
+)
+@require_worker
+@idempotent_worker_action
+def respond_to_job_interview(
+    user_id: str,
+    application_id: str,
+):
+    user = _get_user(user_id)
+    if not ObjectId.is_valid(application_id):
+        raise BadRequest("Invalid job application id")
+
+    payload = request.get_json(silent=True) or {}
+    require_json_fields(payload, ["status"])
+    response_status = payload["status"]
+    if (
+        not isinstance(response_status, str)
+        or response_status not in INTERVIEW_RESPONSE_STATUSES
+    ):
+        raise BadRequest("Invalid interview response status")
+    note = _optional_text(payload, "note", 500)
+    if response_status == "declined" and not note:
+        raise BadRequest(
+            "note is required when declining an interview"
+        )
+
+    db = get_db()
+    application = db.jobApplications.find_one(
+        {
+            "_id": ObjectId(application_id),
+            "userId": user["_id"],
+        }
+    )
+    if application is None:
+        raise NotFound("Job application not found")
+    if application.get("status") not in INTERVIEW_APPLICATION_STATUSES:
+        raise Conflict("Job application has no active interview")
+
+    interview = application.get("interview")
+    if not interview:
+        raise Conflict("Job application has no scheduled interview")
+    now = datetime.now(UTC)
+    scheduled_at = interview.get("scheduledAt")
+    if not isinstance(scheduled_at, datetime) or scheduled_at <= now:
+        raise Conflict("Scheduled interview is no longer active")
+
+    current_response = interview.get("response") or {}
+    if (
+        current_response.get("status") == response_status
+        and current_response.get("note", "") == note
+    ):
+        return jsonify(
+            {"jobApplication": serialize_job_application(application)}
+        )
+
+    response = {
+        "status": response_status,
+        "note": note,
+        "respondedAt": now,
+    }
+    update_query = {
+        "_id": application["_id"],
+        "userId": user["_id"],
+        "status": application["status"],
+        "interview.scheduledAt": scheduled_at,
+    }
+    if interview.get("updatedAt") is not None:
+        update_query["interview.updatedAt"] = interview["updatedAt"]
+    result = db.jobApplications.update_one(
+        update_query,
+        {
+            "$set": {
+                "interview.response": response,
+                "updatedAt": now,
+            }
+        },
+    )
+    if result.modified_count != 1:
+        raise Conflict("Interview plan changed concurrently")
     updated = db.jobApplications.find_one(
         {"_id": application["_id"]}
     )

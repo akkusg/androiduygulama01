@@ -21,7 +21,10 @@ onaydan sonra çalışan tarafından geri çekilebilir. Aktif servis talepleri d
 İşveren incelenen veya kısa listedeki başvuruya görüşme tarihi, görüşme türü,
 konum ve hazırlık notu eklediğinde plan başvuru kartında yerel saatle
 gösterilir. Planlama ve yeniden planlama değişiklikleri arka plan kontrolünde
-ve yapılandırılmış push bildirimlerinde çalışana bildirilir.
+ve yapılandırılmış push bildirimlerinde çalışana bildirilir. Çalışan görüşmeye
+katılacağını onaylayabilir veya zorunlu bir gerekçeyle katılamayacağını
+işverene iletebilir. İşveren planı değiştirdiğinde önceki çalışan yanıtı
+sıfırlanır ve yeni plan yeniden onay bekler.
 Bekleyen çalışan soruları,
 ekran açıkken 15 saniyede bir yenilenir ve üst çubuktaki yenile ikonu ile
 istenildiğinde hemen güncellenebilir. Soru, değerlendirme, eğitim, servis ve iş

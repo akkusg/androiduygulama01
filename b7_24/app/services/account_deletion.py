@@ -217,7 +217,10 @@ def _anonymize_job_applications(
                     "statusHistory": sanitized_history,
                     "accountDeletedAt": deleted_at,
                     "updatedAt": deleted_at,
-                }
+                },
+                "$unset": {
+                    "interview.response": "",
+                },
             },
         )
 

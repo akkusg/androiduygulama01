@@ -326,6 +326,20 @@ curl -X POST http://127.0.0.1:5050/api/users/<user_id>/job-applications/<applica
   -H "Idempotency-Key: <unique-key>"
 ```
 
+Workers can confirm a future active interview or report that they cannot
+attend. A decline requires a note so the employer can reschedule:
+
+```bash
+curl -X POST http://127.0.0.1:5050/api/users/<user_id>/job-applications/<application_id>/interview-response \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: <unique-key>" \
+  -d '{"status":"declined","note":"Bu saatte vardiyadayım, yeniden planlayabilir miyiz?"}'
+```
+
+The response is scoped to the current interview plan. Rescheduling replaces
+the plan and clears the previous worker response.
+
 Video upload, worker question, assessment, training, shuttle, and
 job-application mutations require a unique `Idempotency-Key`. Video uploads
 also require `X-Upload-SHA256`; the server verifies this digest after saving
