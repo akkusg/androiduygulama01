@@ -22,6 +22,8 @@ APPLICATION_STATUSES = {
     "submitted",
     "reviewing",
     "shortlisted",
+    "offered",
+    "offer_declined",
     "rejected",
     "hired",
     "withdrawn",
@@ -32,9 +34,13 @@ WORKER_WITHDRAWABLE_STATUSES = {
     "shortlisted",
 }
 APPLICATION_STATUS_TRANSITIONS = {
-    "submitted": {"reviewing", "shortlisted", "rejected", "hired"},
-    "reviewing": {"shortlisted", "rejected", "hired"},
-    "shortlisted": {"reviewing", "rejected", "hired"},
+    "submitted": {
+        "reviewing", "shortlisted", "offered", "rejected", "hired"
+    },
+    "reviewing": {"shortlisted", "offered", "rejected", "hired"},
+    "shortlisted": {"reviewing", "offered", "rejected", "hired"},
+    "offered": {"reviewing", "rejected", "hired"},
+    "offer_declined": {"reviewing", "offered", "rejected"},
     "rejected": {"reviewing"},
     "hired": set(),
     "withdrawn": set(),
@@ -42,6 +48,7 @@ APPLICATION_STATUS_TRANSITIONS = {
 INTERVIEW_APPLICATION_STATUSES = {"reviewing", "shortlisted"}
 INTERVIEW_TYPES = {"onsite", "phone", "video"}
 INTERVIEW_RESPONSE_STATUSES = {"confirmed", "declined"}
+OFFER_RESPONSE_STATUSES = {"accepted", "declined"}
 
 
 @job_applications_bp.post("/api/users/<user_id>/job-applications")
@@ -308,6 +315,138 @@ def respond_to_job_interview(
     )
 
 
+@job_applications_bp.post(
+    "/api/users/<user_id>/job-applications/"
+    "<application_id>/offer-response"
+)
+@require_worker
+@idempotent_worker_action
+def respond_to_job_offer(
+    user_id: str,
+    application_id: str,
+):
+    user = _get_user(user_id)
+    if not ObjectId.is_valid(application_id):
+        raise BadRequest("Invalid job application id")
+
+    payload = request.get_json(silent=True) or {}
+    require_json_fields(payload, ["status"])
+    response_status = payload["status"]
+    if (
+        not isinstance(response_status, str)
+        or response_status not in OFFER_RESPONSE_STATUSES
+    ):
+        raise BadRequest("Invalid job offer response status")
+    note = _optional_text(payload, "note", 500)
+    if response_status == "declined" and not note:
+        raise BadRequest("note is required when declining a job offer")
+
+    db = get_db()
+    application = db.jobApplications.find_one(
+        {
+            "_id": ObjectId(application_id),
+            "userId": user["_id"],
+        }
+    )
+    if application is None:
+        raise NotFound("Job application not found")
+
+    offer = application.get("offer") or {}
+    current_response = offer.get("response") or {}
+    resulting_status = (
+        "hired" if response_status == "accepted" else "offer_declined"
+    )
+    if (
+        application.get("status") == resulting_status
+        and current_response.get("status") == response_status
+        and current_response.get("note", "") == note
+    ):
+        return jsonify(
+            {"jobApplication": serialize_job_application(application)}
+        )
+    if application.get("status") != "offered" or not offer:
+        raise Conflict("Job application has no active offer")
+
+    now = datetime.now(UTC)
+    expires_at = offer.get("expiresAt")
+    if not isinstance(expires_at, datetime) or expires_at <= now:
+        raise Conflict("Job offer has expired")
+
+    reservation = None
+    reservation_created = False
+    if response_status == "accepted" and application.get("jobPostingId"):
+        posting = db.jobPostings.find_one(
+            {
+                "_id": application["jobPostingId"],
+                "employerKey": application.get("employerKey"),
+            }
+        )
+        if posting is not None:
+            reservation, reservation_created = _reserve_hiring_slot(
+                db,
+                posting,
+                application,
+                now,
+            )
+
+    response = {
+        "status": response_status,
+        "note": note,
+        "respondedAt": now,
+    }
+    update_operation = {
+        "$set": {
+            "status": resulting_status,
+            "offer.response": response,
+            "updatedAt": now,
+        },
+        "$push": {
+            "statusHistory": {
+                "status": resulting_status,
+                "note": (
+                    "Çalışan iş teklifini kabul etti."
+                    if response_status == "accepted"
+                    else "Çalışan iş teklifini reddetti."
+                ),
+                "changedAt": now,
+            }
+        },
+    }
+    if reservation is not None:
+        update_operation["$set"]["hiringSlot"] = reservation["slot"]
+    if response_status == "declined":
+        update_operation["$unset"] = {"hiringSlot": ""}
+
+    try:
+        result = db.jobApplications.update_one(
+            {
+                "_id": application["_id"],
+                "userId": user["_id"],
+                "status": "offered",
+                "offer.expiresAt": expires_at,
+                "offer.updatedAt": offer.get("updatedAt"),
+            },
+            update_operation,
+        )
+    except Exception:
+        if reservation_created:
+            _release_application_hiring_slot(db, application["_id"])
+        raise
+    if result.modified_count != 1:
+        if reservation_created:
+            _release_application_hiring_slot(db, application["_id"])
+        raise Conflict("Job offer changed concurrently")
+    if response_status == "declined":
+        _release_application_hiring_slot(db, application["_id"])
+
+    updated = db.jobApplications.find_one(
+        {"_id": application["_id"]}
+    )
+    return jsonify(
+        {"jobApplication": serialize_job_application(updated)}
+    )
+
+
 @job_applications_bp.get("/api/employers/<employer_key>/job-applications")
 @require_employer
 def list_employer_job_applications(employer_key: str):
@@ -348,7 +487,10 @@ def update_employer_job_application(employer_key: str, application_id: str):
     payload = request.get_json(silent=True) or {}
     require_json_fields(payload, ["status"])
     status = payload["status"]
-    if status not in APPLICATION_STATUSES:
+    if (
+        not isinstance(status, str)
+        or status not in APPLICATION_STATUSES
+    ):
         raise BadRequest("Invalid application status")
 
     db = get_db()
@@ -360,6 +502,8 @@ def update_employer_job_application(employer_key: str, application_id: str):
     now = datetime.now(UTC)
     interview_provided = "interview" in payload
     interview = _parse_interview(payload, now)
+    offer_provided = "offer" in payload
+    offer = _parse_offer(payload, now)
     if (
         interview_provided
         and interview is not None
@@ -368,9 +512,16 @@ def update_employer_job_application(employer_key: str, application_id: str):
         raise BadRequest(
             "Interview can only be scheduled for an active application"
         )
+    if offer_provided and (status != "offered" or offer is None):
+        raise BadRequest(
+            "offer details are required when creating a job offer"
+        )
+    if status == "offered" and offer is None:
+        raise BadRequest("offer details are required for offered status")
     if (
         status == application["status"]
         and not interview_provided
+        and not offer_provided
     ):
         event_id = application.get("notificationEventId")
         if event_id:
@@ -405,9 +556,11 @@ def update_employer_job_application(employer_key: str, application_id: str):
             note = "Görüşme planı kaldırıldı."
     elif interview is not None and not note:
         note = "Görüşme planı güncellendi."
+    if offer is not None and not note:
+        note = "İş teklifi oluşturuldu."
     reservation = None
     reservation_created = False
-    if status == "hired" and application.get("jobPostingId"):
+    if status in {"offered", "hired"} and application.get("jobPostingId"):
         posting = db.jobPostings.find_one(
             {
                 "_id": application["jobPostingId"],
@@ -437,6 +590,8 @@ def update_employer_job_application(employer_key: str, application_id: str):
         updates["hiringSlot"] = reservation["slot"]
     if interview is not None:
         updates["interview"] = interview
+    if offer is not None:
+        updates["offer"] = offer
     update_operation = {
         "$set": updates,
         "$push": {"statusHistory": history_item},
@@ -463,6 +618,11 @@ def update_employer_job_application(employer_key: str, application_id: str):
                 {"applicationId": application["_id"]}
             )
         raise Conflict("Application status changed concurrently")
+    if (
+        application.get("status") == "offered"
+        and status not in {"offered", "hired"}
+    ):
+        _release_application_hiring_slot(db, application["_id"])
     updated = db.jobApplications.find_one({"_id": application["_id"]})
     push_options = {}
     if interview_provided:
@@ -587,6 +747,49 @@ def _parse_interview(
     }
 
 
+def _parse_offer(
+    payload: dict,
+    now: datetime,
+) -> dict | None:
+    if "offer" not in payload:
+        return None
+    value = payload["offer"]
+    if not isinstance(value, dict):
+        raise BadRequest("offer must be an object")
+
+    start_date = _parse_offer_datetime(value, "startDate")
+    expires_at = _parse_offer_datetime(value, "expiresAt")
+    if start_date <= now:
+        raise BadRequest("offer.startDate must be in the future")
+    if expires_at <= now:
+        raise BadRequest("offer.expiresAt must be in the future")
+    if expires_at >= start_date:
+        raise BadRequest("offer.expiresAt must be before offer.startDate")
+    return {
+        "startDate": start_date,
+        "expiresAt": expires_at,
+        "note": _optional_text(value, "note", 1000),
+        "updatedAt": now,
+    }
+
+
+def _parse_offer_datetime(value: dict, field: str) -> datetime:
+    raw_value = value.get(field)
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise BadRequest(f"offer.{field} is required")
+    try:
+        parsed = datetime.fromisoformat(
+            raw_value.strip().replace("Z", "+00:00")
+        )
+    except ValueError as error:
+        raise BadRequest(
+            f"offer.{field} must be an ISO 8601 date-time"
+        ) from error
+    if parsed.tzinfo is None:
+        raise BadRequest(f"offer.{field} must include a timezone")
+    return parsed.astimezone(UTC)
+
+
 def _pagination(page: int, limit: int, total: int) -> dict:
     return {
         "page": page,
@@ -599,6 +802,7 @@ def _pagination(page: int, limit: int, total: int) -> dict:
 def _reserve_hiring_slot(
     db, posting: dict, application: dict, now: datetime
 ) -> tuple[dict, bool]:
+    _release_expired_offer_slots(db, posting["_id"], now)
     existing = db.jobHiringSlots.find_one(
         {"applicationId": application["_id"]}
     )
@@ -633,7 +837,13 @@ def _backfill_hiring_slots(
     hired_applications = db.jobApplications.find(
         {
             "jobPostingId": posting["_id"],
-            "status": "hired",
+            "$or": [
+                {"status": "hired"},
+                {
+                    "status": "offered",
+                    "offer.expiresAt": {"$gt": now},
+                },
+            ],
         }
     ).sort("createdAt", 1)
     for hired_application in hired_applications:
@@ -661,3 +871,41 @@ def _backfill_hiring_slots(
                     }
                 ):
                     break
+
+
+def _release_expired_offer_slots(
+    db,
+    job_posting_id: ObjectId,
+    now: datetime,
+) -> None:
+    expired_ids = [
+        item["_id"]
+        for item in db.jobApplications.find(
+            {
+                "jobPostingId": job_posting_id,
+                "status": "offered",
+                "offer.expiresAt": {"$lte": now},
+            },
+            {"_id": 1},
+        )
+    ]
+    if not expired_ids:
+        return
+    db.jobHiringSlots.delete_many(
+        {"applicationId": {"$in": expired_ids}}
+    )
+    db.jobApplications.update_many(
+        {"_id": {"$in": expired_ids}},
+        {"$unset": {"hiringSlot": ""}},
+    )
+
+
+def _release_application_hiring_slot(
+    db,
+    application_id: ObjectId,
+) -> None:
+    db.jobHiringSlots.delete_one({"applicationId": application_id})
+    db.jobApplications.update_one(
+        {"_id": application_id},
+        {"$unset": {"hiringSlot": ""}},
+    )

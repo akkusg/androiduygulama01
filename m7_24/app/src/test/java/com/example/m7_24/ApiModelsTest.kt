@@ -105,7 +105,7 @@ class ApiModelsTest {
               "jobApplications": [
                 {
                   "id": "application-1",
-                  "status": "reviewing",
+                  "status": "offered",
                   "job": {
                     "title": "Kaynak Operatörü",
                     "company": "ACME"
@@ -125,6 +125,16 @@ class ApiModelsTest {
                       "status": "confirmed",
                       "note": "",
                       "respondedAt": "2026-07-30T08:00:00+00:00"
+                    }
+                  },
+                  "offer": {
+                    "startDate": "2026-08-10T06:00:00+00:00",
+                    "expiresAt": "2026-08-03T18:00:00+00:00",
+                    "note": "İlk vardiya için kimliğinizle gelin.",
+                    "response": {
+                      "status": "accepted",
+                      "note": "",
+                      "respondedAt": "2026-07-31T08:00:00+00:00"
                     }
                   }
                 }
@@ -156,7 +166,7 @@ class ApiModelsTest {
             dashboard.recommendedJobs.single().applicationStatus,
         )
         assertEquals(
-            "reviewing",
+            "offered",
             dashboard.jobApplications.single().status,
         )
         assertEquals(
@@ -172,6 +182,14 @@ class ApiModelsTest {
             "confirmed",
             dashboard.jobApplications.single()
                 .interview?.response?.status,
+        )
+        assertEquals(
+            "accepted",
+            dashboard.jobApplications.single().offer?.response?.status,
+        )
+        assertEquals(
+            "2026-08-10T06:00:00+00:00",
+            dashboard.jobApplications.single().offer?.startDate,
         )
         assertEquals(
             listOf("kaynak", "iş güvenliği"),
@@ -289,6 +307,10 @@ class ApiModelsTest {
         assertEquals(
             60_000L,
             dashboardRefreshDelay(dashboard(jobStatus = "shortlisted")),
+        )
+        assertEquals(
+            60_000L,
+            dashboardRefreshDelay(dashboard(jobStatus = "offered")),
         )
         assertEquals(
             60_000L,

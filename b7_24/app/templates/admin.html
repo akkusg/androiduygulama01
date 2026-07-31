@@ -202,6 +202,36 @@
                     </label>
                     <p class="helper-text">Tarih girilmezse mevcut plan korunur. Yüz yüze görüşmelerde konum zorunludur.</p>
                 </section>
+                <section id="application-offer-response" class="editor-section" hidden>
+                    <div class="editor-section-header">
+                        <h3>Çalışan teklif yanıtı</h3>
+                    </div>
+                    <div id="offer-response-summary" class="interview-response-summary" hidden>
+                        <strong id="offer-response-status"></strong>
+                        <p id="offer-response-at"></p>
+                        <p id="offer-response-note"></p>
+                    </div>
+                </section>
+                <section id="application-offer-fields" class="editor-section" hidden>
+                    <div class="editor-section-header">
+                        <h3>İş teklifi</h3>
+                    </div>
+                    <div class="field-grid">
+                        <label>
+                            İşe başlangıç tarihi
+                            <input id="offer-start-date" type="datetime-local">
+                        </label>
+                        <label>
+                            Son yanıt tarihi
+                            <input id="offer-expires-at" type="datetime-local">
+                        </label>
+                    </div>
+                    <label>
+                        Çalışana teklif notu
+                        <textarea id="offer-note" rows="3" maxlength="1000"></textarea>
+                    </label>
+                    <p class="helper-text">Son yanıt tarihi başlangıç tarihinden önce olmalıdır. Teklif yayınlandığında ilan kontenjanı çalışan için ayrılır.</p>
+                </section>
             </div>
             <p id="decision-error" class="form-error" role="alert"></p>
             <footer class="dialog-actions">

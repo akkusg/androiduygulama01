@@ -69,6 +69,7 @@ import com.example.m7_24.api.JobApplicationDto
 import com.example.m7_24.api.JobApplicationRequest
 import com.example.m7_24.api.JobDto
 import com.example.m7_24.api.MobileConfigResponse
+import com.example.m7_24.api.OfferResponseRequest
 import com.example.m7_24.api.OtpRequest
 import com.example.m7_24.api.OtpVerifyRequest
 import com.example.m7_24.api.ProfileReviewRequest
@@ -96,11 +97,13 @@ private const val PENDING_QUESTION_REFRESH_MS = 15_000L
 private const val ACTIVE_WORKFLOW_REFRESH_MS = 60_000L
 private const val VIDEO_RECORDING_MAX_DURATION_MS = 90_000L
 private const val VIDEO_RECORDING_MAX_FILE_SIZE_BYTES = 150L * 1024 * 1024
-private val ACTIVE_JOB_APPLICATION_STATUSES = setOf(
+private val WORKER_WITHDRAWABLE_JOB_APPLICATION_STATUSES = setOf(
     "submitted",
     "reviewing",
     "shortlisted",
 )
+private val ACTIVE_JOB_APPLICATION_STATUSES =
+    WORKER_WITHDRAWABLE_JOB_APPLICATION_STATUSES + "offered"
 
 private sealed interface MobileGateState {
     data object Loading : MobileGateState
@@ -1378,6 +1381,9 @@ fun DashboardScreen(
     var respondingInterviewApplicationId by remember {
         mutableStateOf<String?>(null)
     }
+    var respondingOfferApplicationId by remember {
+        mutableStateOf<String?>(null)
+    }
     var activeWorkerActionKey by remember {
         mutableStateOf<String?>(null)
     }
@@ -1706,6 +1712,8 @@ fun DashboardScreen(
                                 withdrawingJobApplicationId,
                             respondingInterviewApplicationId =
                                 respondingInterviewApplicationId,
+                            respondingOfferApplicationId =
+                                respondingOfferApplicationId,
                             onInterviewResponse = interviewResponse@ {
                                     applicationId,
                                     responseStatus,
@@ -1756,6 +1764,55 @@ fun DashboardScreen(
                                             )
                                     } finally {
                                         respondingInterviewApplicationId =
+                                            null
+                                    }
+                                }
+                            },
+                            onOfferResponse = offerResponse@ {
+                                    applicationId,
+                                    responseStatus,
+                                    note,
+                                ->
+                                val currentUserId =
+                                    userId ?: return@offerResponse
+                                if (respondingOfferApplicationId != null) {
+                                    return@offerResponse
+                                }
+                                coroutineScope.launch {
+                                    respondingOfferApplicationId =
+                                        applicationId
+                                    jobActionMessage = null
+                                    try {
+                                        BackendClient.api.respondToOffer(
+                                            currentUserId,
+                                            applicationId,
+                                            OfferResponseRequest(
+                                                status = responseStatus,
+                                                note = note,
+                                            ),
+                                            BackendClient
+                                                .newIdempotencyKey(),
+                                        )
+                                        jobActionMessage =
+                                            if (
+                                                responseStatus ==
+                                                "accepted"
+                                            ) {
+                                                "İş teklifini kabul " +
+                                                    "ettiniz."
+                                            } else {
+                                                "İş teklifi yanıtınız " +
+                                                    "işverene iletildi."
+                                            }
+                                        refreshTick += 1
+                                    } catch (error: Exception) {
+                                        jobActionMessage =
+                                            error.toUserMessage(
+                                                "İş teklifi yanıtı " +
+                                                    "gönderilemedi."
+                                            )
+                                    } finally {
+                                        respondingOfferApplicationId =
                                             null
                                     }
                                 }
@@ -3091,7 +3148,10 @@ internal fun JobApplicationsSection(
     applications: List<JobApplicationDto>,
     withdrawingApplicationId: String? = null,
     respondingInterviewApplicationId: String? = null,
+    respondingOfferApplicationId: String? = null,
     onInterviewResponse: (String, String, String) -> Unit =
+        { _, _, _ -> },
+    onOfferResponse: (String, String, String) -> Unit =
         { _, _, _ -> },
     onWithdraw: (String) -> Unit = {},
 ) {
@@ -3102,6 +3162,12 @@ internal fun JobApplicationsSection(
         mutableStateOf<Pair<String, String>?>(null)
     }
     var interviewResponseNote by remember {
+        mutableStateOf("")
+    }
+    var pendingOfferResponse by remember {
+        mutableStateOf<Pair<String, String>?>(null)
+    }
+    var offerResponseNote by remember {
         mutableStateOf("")
     }
     Text(
@@ -3288,6 +3354,8 @@ internal fun JobApplicationsSection(
                                         enabled =
                                             respondingInterviewApplicationId ==
                                                 null &&
+                                                respondingOfferApplicationId ==
+                                                null &&
                                                 withdrawingApplicationId ==
                                                 null,
                                         modifier = Modifier
@@ -3316,6 +3384,8 @@ internal fun JobApplicationsSection(
                                         enabled =
                                             respondingInterviewApplicationId ==
                                                 null &&
+                                                respondingOfferApplicationId ==
+                                                null &&
                                                 withdrawingApplicationId ==
                                                 null,
                                         modifier = Modifier
@@ -3332,11 +3402,147 @@ internal fun JobApplicationsSection(
                             }
                         }
                     }
+                application.offer?.let { offer ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .testTag(
+                                "job_application_offer_" +
+                                    application.id.orEmpty()
+                            ),
+                    ) {
+                        Text(
+                            text = "İş Teklifi",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        offer.startDate
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { startDate ->
+                                Text(
+                                    text = "İşe başlangıç: " +
+                                        formatInterviewDate(startDate),
+                                    style = MaterialTheme.typography
+                                        .bodyMedium,
+                                    color = MaterialTheme.colorScheme
+                                        .primary,
+                                )
+                            }
+                        offer.expiresAt
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { expiresAt ->
+                                Text(
+                                    text = "Son yanıt: " +
+                                        formatInterviewDate(expiresAt),
+                                    style = MaterialTheme.typography
+                                        .bodySmall,
+                                    color = MaterialTheme.colorScheme
+                                        .onSurfaceVariant,
+                                )
+                            }
+                        offer.note
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { offerNote ->
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = offerNote,
+                                    style = MaterialTheme.typography
+                                        .bodySmall,
+                                )
+                            }
+                        val offerResponseStatus = offer.response?.status
+                        if (!offerResponseStatus.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (
+                                    offerResponseStatus == "accepted"
+                                ) {
+                                    "İş teklifini kabul ettiniz."
+                                } else {
+                                    "İş teklifini reddettiniz."
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (
+                                    offerResponseStatus == "accepted"
+                                ) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
+                                modifier = Modifier.testTag(
+                                    "job_application_offer_response_" +
+                                        application.id.orEmpty()
+                                ),
+                            )
+                            offer.response?.note
+                                ?.takeIf { it.isNotBlank() }
+                                ?.let { responseNote ->
+                                    Text(
+                                        text = responseNote,
+                                        style = MaterialTheme.typography
+                                            .bodySmall,
+                                        color = MaterialTheme.colorScheme
+                                            .onSurfaceVariant,
+                                    )
+                                }
+                        }
+                        val offerApplicationId = application.id
+                        if (
+                            application.status == "offered" &&
+                            !offerApplicationId.isNullOrBlank()
+                        ) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    offerResponseNote = ""
+                                    pendingOfferResponse =
+                                        offerApplicationId to "accepted"
+                                },
+                                enabled =
+                                    respondingOfferApplicationId == null &&
+                                        respondingInterviewApplicationId ==
+                                        null &&
+                                        withdrawingApplicationId == null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(
+                                        "job_application_offer_accept_" +
+                                            offerApplicationId
+                                    ),
+                            ) {
+                                Text("Teklifi Kabul Et")
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    offerResponseNote = ""
+                                    pendingOfferResponse =
+                                        offerApplicationId to "declined"
+                                },
+                                enabled =
+                                    respondingOfferApplicationId == null &&
+                                        respondingInterviewApplicationId ==
+                                        null &&
+                                        withdrawingApplicationId == null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(
+                                        "job_application_offer_decline_" +
+                                            offerApplicationId
+                                    ),
+                            ) {
+                                Text("Teklifi Reddet")
+                            }
+                        }
+                    }
+                }
                 val applicationId = application.id
                 if (
                     !applicationId.isNullOrBlank() &&
                     application.status in
-                    ACTIVE_JOB_APPLICATION_STATUSES
+                    WORKER_WITHDRAWABLE_JOB_APPLICATION_STATUSES
                 ) {
                     Spacer(modifier = Modifier.height(10.dp))
                     OutlinedButton(
@@ -3345,7 +3551,8 @@ internal fun JobApplicationsSection(
                         },
                         enabled =
                             withdrawingApplicationId == null &&
-                                respondingInterviewApplicationId == null,
+                                respondingInterviewApplicationId == null &&
+                                respondingOfferApplicationId == null,
                         colors =
                             ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme
@@ -3490,6 +3697,87 @@ internal fun JobApplicationsSection(
                     onClick = {
                         pendingInterviewResponse = null
                         interviewResponseNote = ""
+                    }
+                ) {
+                    Text("Vazgeç")
+                }
+            },
+        )
+    }
+    pendingOfferResponse?.let { request ->
+        val applicationId = request.first
+        val responseStatus = request.second
+        val declining = responseStatus == "declined"
+        AlertDialog(
+            onDismissRequest = {
+                pendingOfferResponse = null
+                offerResponseNote = ""
+            },
+            title = {
+                Text(
+                    if (declining) {
+                        "İş teklifini reddet"
+                    } else {
+                        "İş teklifini kabul et"
+                    }
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        if (declining) {
+                            "İşverenin değerlendirebilmesi için kısa " +
+                                "bir gerekçe yazın."
+                        } else {
+                            "İşe başlangıç tarihini ve teklif " +
+                                "koşullarını kabul ettiğinizi onaylayın."
+                        }
+                    )
+                    if (declining) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = offerResponseNote,
+                            onValueChange = {
+                                offerResponseNote = it.take(500)
+                            },
+                            label = { Text("Gerekçe") },
+                            minLines = 2,
+                            maxLines = 4,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(
+                                    "job_application_offer_response_note"
+                                ),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val note = offerResponseNote.trim()
+                        pendingOfferResponse = null
+                        offerResponseNote = ""
+                        onOfferResponse(
+                            applicationId,
+                            responseStatus,
+                            note,
+                        )
+                    },
+                    enabled =
+                        !declining || offerResponseNote.isNotBlank(),
+                    modifier = Modifier.testTag(
+                        "job_application_offer_response_confirm"
+                    ),
+                ) {
+                    Text(if (declining) "Reddet" else "Kabul Et")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingOfferResponse = null
+                        offerResponseNote = ""
                     }
                 ) {
                     Text("Vazgeç")
@@ -3747,6 +4035,8 @@ private fun String.toStatusLabel(): String {
         "submitted" -> "Başvuru alındı"
         "reviewing" -> "İncelemede"
         "shortlisted" -> "Ön listeye alındı"
+        "offered" -> "İş teklifi gönderildi"
+        "offer_declined" -> "Teklif reddedildi"
         "rejected" -> "Olumsuz"
         "hired" -> "İşe alındı"
         "withdrawn" -> "Geri çekildi"

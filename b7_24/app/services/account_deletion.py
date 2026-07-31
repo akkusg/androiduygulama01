@@ -194,6 +194,11 @@ def _anonymize_job_applications(
 ) -> None:
     applications = db.jobApplications.find({"userId": user_id})
     for application in applications:
+        release_hiring_slot = application.get("status") == "offered"
+        if release_hiring_slot:
+            db.jobHiringSlots.delete_one(
+                {"applicationId": application["_id"]}
+            )
         sanitized_history = [
             {
                 "status": item.get("status"),
@@ -220,6 +225,8 @@ def _anonymize_job_applications(
                 },
                 "$unset": {
                     "interview.response": "",
+                    "offer.response": "",
+                    **({"hiringSlot": ""} if release_hiring_slot else {}),
                 },
             },
         )

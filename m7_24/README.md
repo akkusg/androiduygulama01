@@ -25,6 +25,11 @@ ve yapılandırılmış push bildirimlerinde çalışana bildirilir. Çalışan 
 katılacağını onaylayabilir veya zorunlu bir gerekçeyle katılamayacağını
 işverene iletebilir. İşveren planı değiştirdiğinde önceki çalışan yanıtı
 sıfırlanır ve yeni plan yeniden onay bekler.
+İşveren başlangıç ve son yanıt tarihi belirleyerek iş teklifi gönderdiğinde
+teklif başvuru kartında gösterilir. Çalışan açık bir onayla teklifi kabul edip
+işe alım durumuna geçebilir veya zorunlu gerekçeyle reddedebilir. Süresi dolan
+teklifler backend tarafından kabul edilmez; ret halinde ayrılan ilan
+kontenjanı yeniden kullanılabilir hale gelir.
 Bekleyen çalışan soruları,
 ekran açıkken 15 saniyede bir yenilenir ve üst çubuktaki yenile ikonu ile
 istenildiğinde hemen güncellenebilir. Soru, değerlendirme, eğitim, servis ve iş

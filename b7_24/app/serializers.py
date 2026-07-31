@@ -164,6 +164,26 @@ def serialize_job_application(application: dict) -> dict:
                 else None
             ),
         }
+    offer = application.get("offer")
+    serialized_offer = None
+    if offer:
+        response = offer.get("response")
+        serialized_offer = {
+            **offer,
+            "startDate": serialize_datetime(offer.get("startDate")),
+            "expiresAt": serialize_datetime(offer.get("expiresAt")),
+            "updatedAt": serialize_datetime(offer.get("updatedAt")),
+            "response": (
+                {
+                    **response,
+                    "respondedAt": serialize_datetime(
+                        response.get("respondedAt")
+                    ),
+                }
+                if response
+                else None
+            ),
+        }
     return {
         "id": serialize_object_id(application.get("_id")),
         "userId": serialize_object_id(application.get("userId")),
@@ -176,6 +196,7 @@ def serialize_job_application(application: dict) -> dict:
         "coverNote": application.get("coverNote"),
         "hiringSlot": application.get("hiringSlot"),
         "interview": serialized_interview,
+        "offer": serialized_offer,
         "withdrawnAt": serialize_datetime(
             application.get("withdrawnAt")
         ),

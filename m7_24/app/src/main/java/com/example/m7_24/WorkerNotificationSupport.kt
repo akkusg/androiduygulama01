@@ -156,6 +156,8 @@ private fun applicationStatusLabel(status: String): String = when (status) {
     "submitted" -> "Başvuru alındı"
     "reviewing" -> "İncelemede"
     "shortlisted" -> "Kısa listede"
+    "offered" -> "İş teklifiniz hazır"
+    "offer_declined" -> "Teklif reddedildi"
     "rejected" -> "Reddedildi"
     "hired" -> "İşe alındınız"
     "withdrawn" -> "Geri çekildi"

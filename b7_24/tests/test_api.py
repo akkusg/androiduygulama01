@@ -2508,6 +2508,7 @@ def test_hiring_capacity_uses_atomic_slots(app, client):
     ).get_json()["jobPosting"]
 
     application_ids = []
+    worker_ids = []
     for index in range(2):
         worker = client.post(
             "/api/users",
@@ -2516,6 +2517,7 @@ def test_hiring_capacity_uses_atomic_slots(app, client):
                 "employerKey": "acme",
             },
         ).get_json()["user"]
+        worker_ids.append(worker["id"])
         client.post(
             f"/api/users/{worker['id']}/videos",
             data={
@@ -2535,40 +2537,189 @@ def test_hiring_capacity_uses_atomic_slots(app, client):
         ).get_json()["jobApplication"]
         application_ids.append(application["id"])
 
-    first_hire = client.patch(
+    offer_start = (datetime.now(UTC) + timedelta(days=10)).replace(
+        microsecond=0
+    )
+    offer_expires = (datetime.now(UTC) + timedelta(days=3)).replace(
+        microsecond=0
+    )
+    offer_payload = {
+        "status": "offered",
+        "offer": {
+            "startDate": offer_start.isoformat(),
+            "expiresAt": offer_expires.isoformat(),
+            "note": "İlk vardiya başlangıcı için hazır olun.",
+        },
+    }
+    missing_offer = client.patch(
         f"/api/employers/acme/job-applications/{application_ids[0]}",
-        json={"status": "hired"},
+        json={"status": "offered"},
+    )
+    invalid_offer = client.patch(
+        f"/api/employers/acme/job-applications/{application_ids[0]}",
+        json={
+            "status": "offered",
+            "offer": {
+                "startDate": offer_start.isoformat(),
+                "expiresAt": (
+                    offer_start + timedelta(days=1)
+                ).isoformat(),
+            },
+        },
+    )
+    first_offer = client.patch(
+        f"/api/employers/acme/job-applications/{application_ids[0]}",
+        json=offer_payload,
     )
     capacity_reached = client.patch(
         f"/api/employers/acme/job-applications/{application_ids[1]}",
-        json={"status": "hired"},
+        json=offer_payload,
     )
 
-    assert first_hire.status_code == 200
-    assert first_hire.get_json()["jobApplication"]["hiringSlot"] == 1
+    assert missing_offer.status_code == 400
+    assert invalid_offer.status_code == 400
+    assert first_offer.status_code == 200
+    offered_application = first_offer.get_json()["jobApplication"]
+    assert offered_application["status"] == "offered"
+    assert offered_application["hiringSlot"] == 1
+    assert offered_application["offer"] == {
+        "startDate": offer_start.isoformat(),
+        "expiresAt": offer_expires.isoformat(),
+        "note": "İlk vardiya başlangıcı için hazır olun.",
+        "updatedAt": offered_application["offer"]["updatedAt"],
+        "response": None,
+    }
     assert capacity_reached.status_code == 409
     with app.app_context():
         assert get_db().jobHiringSlots.count_documents(
             {"jobPostingId": ObjectId(posting["id"])}
         ) == 1
 
+        get_db().jobApplications.update_one(
+            {"_id": ObjectId(application_ids[0])},
+            {
+                "$set": {
+                    "offer.expiresAt": datetime.now(UTC)
+                    - timedelta(minutes=1)
+                }
+            },
+        )
+    expired_response = client.post(
+        f"/api/users/{worker_ids[0]}/job-applications/"
+        f"{application_ids[0]}/offer-response",
+        json={"status": "accepted"},
+        headers={"Idempotency-Key": "expired-offer-response"},
+    )
+    renewed_offer = client.patch(
+        f"/api/employers/acme/job-applications/{application_ids[0]}",
+        json=offer_payload,
+    )
+    assert expired_response.status_code == 409
+    assert renewed_offer.status_code == 200
+    assert renewed_offer.get_json()["jobApplication"]["hiringSlot"] == 1
+
+    decline_without_note = client.post(
+        f"/api/users/{worker_ids[0]}/job-applications/"
+        f"{application_ids[0]}/offer-response",
+        json={"status": "declined"},
+        headers={"Idempotency-Key": "offer-decline-no-note"},
+    )
+    foreign_response = client.post(
+        f"/api/users/{worker_ids[0]}/job-applications/"
+        f"{application_ids[1]}/offer-response",
+        json={"status": "accepted"},
+        headers={"Idempotency-Key": "foreign-offer-response"},
+    )
+    declined = client.post(
+        f"/api/users/{worker_ids[0]}/job-applications/"
+        f"{application_ids[0]}/offer-response",
+        json={
+            "status": "declined",
+            "note": "Başlangıç tarihinde mevcut işimde olacağım.",
+        },
+        headers={"Idempotency-Key": "decline-job-offer"},
+    )
+    assert decline_without_note.status_code == 400
+    assert foreign_response.status_code == 404
+    assert declined.status_code == 200
+    declined_application = declined.get_json()["jobApplication"]
+    assert declined_application["status"] == "offer_declined"
+    assert declined_application.get("hiringSlot") is None
+    assert declined_application["offer"]["response"]["status"] == "declined"
+    assert (
+        declined_application["offer"]["response"]["note"]
+        == "Başlangıç tarihinde mevcut işimde olacağım."
+    )
+    with app.app_context():
+        assert get_db().jobHiringSlots.count_documents(
+            {"jobPostingId": ObjectId(posting["id"])}
+        ) == 0
+
+    second_offer = client.patch(
+        f"/api/employers/acme/job-applications/{application_ids[1]}",
+        json=offer_payload,
+    )
+    accepted = client.post(
+        f"/api/users/{worker_ids[1]}/job-applications/"
+        f"{application_ids[1]}/offer-response",
+        json={"status": "accepted"},
+        headers={"Idempotency-Key": "accept-job-offer"},
+    )
+    accepted_replay = client.post(
+        f"/api/users/{worker_ids[1]}/job-applications/"
+        f"{application_ids[1]}/offer-response",
+        json={"status": "accepted"},
+        headers={"Idempotency-Key": "accept-job-offer"},
+    )
+    assert second_offer.status_code == 200
+    assert accepted.status_code == 200
+    accepted_application = accepted.get_json()["jobApplication"]
+    assert accepted_application["status"] == "hired"
+    assert accepted_application["hiringSlot"] == 1
+    assert accepted_application["offer"]["response"]["status"] == "accepted"
+    assert accepted_application["offer"]["response"]["respondedAt"]
+    assert accepted_replay.get_json() == accepted.get_json()
+
     increased = client.patch(
         f"/api/employers/acme/job-postings/{posting['id']}",
         json={"openings": 2},
     )
-    second_hire = client.patch(
-        f"/api/employers/acme/job-applications/{application_ids[1]}",
-        json={"status": "hired"},
+    reoffered = client.patch(
+        f"/api/employers/acme/job-applications/{application_ids[0]}",
+        json=offer_payload,
     )
-    decrease = client.patch(
+    blocked_decrease = client.patch(
         f"/api/employers/acme/job-postings/{posting['id']}",
         json={"openings": 1},
     )
 
     assert increased.status_code == 200
-    assert second_hire.status_code == 200
-    assert second_hire.get_json()["jobApplication"]["hiringSlot"] == 2
+    assert reoffered.status_code == 200
+    assert reoffered.get_json()["jobApplication"]["hiringSlot"] == 2
+    assert reoffered.get_json()["jobApplication"]["offer"]["response"] is None
+    assert blocked_decrease.status_code == 409
+
+    cancelled_offer = client.patch(
+        f"/api/employers/acme/job-applications/{application_ids[0]}",
+        json={
+            "status": "reviewing",
+            "note": "Teklif koşulları yeniden değerlendirilecek.",
+        },
+    )
+    decrease = client.patch(
+        f"/api/employers/acme/job-postings/{posting['id']}",
+        json={"openings": 1},
+    )
+    assert cancelled_offer.status_code == 200
+    assert (
+        cancelled_offer.get_json()["jobApplication"].get("hiringSlot")
+        is None
+    )
     assert decrease.status_code == 409
+    with app.app_context():
+        assert get_db().jobHiringSlots.count_documents(
+            {"jobPostingId": ObjectId(posting["id"])}
+        ) == 1
 
 
 def test_employer_worker_config_and_question_answering(client):

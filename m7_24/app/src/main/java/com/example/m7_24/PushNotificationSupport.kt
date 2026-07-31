@@ -29,6 +29,7 @@ internal fun parseWorkerPushPayload(
             "submitted",
             "reviewing",
             "shortlisted",
+            "offered",
             "rejected",
             "hired",
         )

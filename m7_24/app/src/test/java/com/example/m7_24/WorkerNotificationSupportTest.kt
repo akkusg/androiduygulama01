@@ -80,6 +80,20 @@ class WorkerNotificationSupportTest {
     }
 
     @Test
+    fun jobOfferStatusCreatesOfferNotification() {
+        val previous = snapshot(applicationStatus = "shortlisted")
+        val current = snapshot(applicationStatus = "offered")
+
+        val events = dashboardNotificationEvents(previous, current)
+
+        assertEquals(1, events.size)
+        assertEquals(
+            "Kaynak Operatörü: İş teklifiniz hazır",
+            events.single().body,
+        )
+    }
+
+    @Test
     fun interviewScheduleChangeCreatesNotification() {
         val previous = snapshot(
             applicationStatus = "shortlisted",
@@ -168,6 +182,19 @@ class WorkerNotificationSupportTest {
                 routeName = "",
             ),
             payload,
+        )
+        assertEquals(
+            "offered",
+            parseWorkerPushPayload(
+                mapOf(
+                    "eventId" to "application:123:event-2",
+                    "eventType" to "application_status",
+                    "title" to "İş teklifiniz hazır",
+                    "body" to "Teklif detaylarını uygulamada görün.",
+                    "entityId" to "application-1",
+                    "status" to "offered",
+                )
+            )?.status,
         )
     }
 

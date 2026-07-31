@@ -926,6 +926,8 @@ def _application_status_label(status: str) -> str:
         "submitted": "Başvuru alındı",
         "reviewing": "İncelemede",
         "shortlisted": "Ön listeye alındı",
+        "offered": "İş teklifiniz hazır",
+        "offer_declined": "Teklif reddedildi",
         "rejected": "Reddedildi",
         "hired": "İşe alındınız",
     }.get(status, "Durum değişti")

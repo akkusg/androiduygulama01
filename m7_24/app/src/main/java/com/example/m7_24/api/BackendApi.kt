@@ -153,4 +153,15 @@ interface BackendApi {
         @Body request: InterviewResponseRequest,
         @Header("Idempotency-Key") idempotencyKey: String
     ): JobApplicationResponse
+
+    @POST(
+        "api/users/{userId}/job-applications/" +
+            "{applicationId}/offer-response"
+    )
+    suspend fun respondToOffer(
+        @Path("userId") userId: String,
+        @Path("applicationId") applicationId: String,
+        @Body request: OfferResponseRequest,
+        @Header("Idempotency-Key") idempotencyKey: String
+    ): JobApplicationResponse
 }

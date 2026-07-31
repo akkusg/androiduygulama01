@@ -73,6 +73,11 @@ data class InterviewResponseRequest(
     val note: String = "",
 )
 
+data class OfferResponseRequest(
+    val status: String,
+    val note: String = "",
+)
+
 data class ProfileReviewRequest(
     val name: String,
 )
@@ -375,6 +380,7 @@ data class JobApplicationDto(
     val candidate: JobApplicationCandidateDto = JobApplicationCandidateDto(),
     val statusHistory: List<JobApplicationStatusHistoryDto> = emptyList(),
     val interview: JobApplicationInterviewDto? = null,
+    val offer: JobApplicationOfferDto? = null,
     val withdrawnAt: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null
@@ -390,6 +396,20 @@ data class JobApplicationInterviewDto(
 )
 
 data class JobApplicationInterviewResponseDto(
+    val status: String? = null,
+    val note: String? = null,
+    val respondedAt: String? = null,
+)
+
+data class JobApplicationOfferDto(
+    val startDate: String? = null,
+    val expiresAt: String? = null,
+    val note: String? = null,
+    val response: JobApplicationOfferResponseDto? = null,
+    val updatedAt: String? = null,
+)
+
+data class JobApplicationOfferResponseDto(
     val status: String? = null,
     val note: String? = null,
     val respondedAt: String? = null,

@@ -27,6 +27,7 @@ import com.example.m7_24.api.CandidateProfileDto
 import com.example.m7_24.api.JobApplicationDto
 import com.example.m7_24.api.JobApplicationInterviewDto
 import com.example.m7_24.api.JobApplicationJobDto
+import com.example.m7_24.api.JobApplicationOfferDto
 import com.example.m7_24.api.JobApplicationStatusHistoryDto
 import com.example.m7_24.api.ShuttleDto
 import com.example.m7_24.api.ShuttleRouteDto
@@ -478,6 +479,96 @@ class AppInstrumentedTest {
             assertEquals(
                 "application-1",
                 withdrawnApplicationId,
+            )
+        }
+    }
+
+    @Test
+    fun jobOfferRequiresDeclineReasonAndCanBeAccepted() {
+        var responseApplicationId = ""
+        var responseStatus = ""
+        var responseNote = ""
+        composeRule.setContent {
+            M7_24Theme {
+                Column(
+                    modifier = Modifier.verticalScroll(
+                        rememberScrollState()
+                    )
+                ) {
+                    JobApplicationsSection(
+                        applications = listOf(
+                            JobApplicationDto(
+                                id = "offer-application",
+                                status = "offered",
+                                job = JobApplicationJobDto(
+                                    title = "Üretim Operatörü",
+                                    company = "ACME Üretim",
+                                    location = "Kocaeli",
+                                ),
+                                offer = JobApplicationOfferDto(
+                                    startDate =
+                                        "2026-08-10T06:00:00+00:00",
+                                    expiresAt =
+                                        "2026-08-03T18:00:00+00:00",
+                                    note = "İlk vardiya için " +
+                                        "kimliğinizle gelin.",
+                                ),
+                            )
+                        ),
+                        onOfferResponse = {
+                                applicationId,
+                                status,
+                                note,
+                            ->
+                            responseApplicationId = applicationId
+                            responseStatus = status
+                            responseNote = note
+                        },
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag(
+            "job_application_offer_offer-application"
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("İş Teklifi")
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "İlk vardiya için kimliğinizle gelin."
+        ).assertIsDisplayed()
+        composeRule.onNodeWithTag(
+            "job_application_withdraw_offer-application"
+        ).assertDoesNotExist()
+        composeRule.onNodeWithTag(
+            "job_application_offer_accept_offer-application"
+        ).performScrollTo().performClick()
+        composeRule.onNodeWithTag(
+            "job_application_offer_response_confirm"
+        ).performClick()
+        composeRule.runOnIdle {
+            assertEquals("offer-application", responseApplicationId)
+            assertEquals("accepted", responseStatus)
+            assertEquals("", responseNote)
+        }
+
+        composeRule.onNodeWithTag(
+            "job_application_offer_decline_offer-application"
+        ).performScrollTo().performClick()
+        composeRule.onNodeWithTag(
+            "job_application_offer_response_confirm"
+        ).assertIsNotEnabled()
+        composeRule.onNodeWithTag(
+            "job_application_offer_response_note"
+        ).performTextInput("Başlangıç tarihi uygun değil.")
+        composeRule.onNodeWithTag(
+            "job_application_offer_response_confirm"
+        ).assertIsEnabled().performClick()
+        composeRule.runOnIdle {
+            assertEquals("declined", responseStatus)
+            assertEquals(
+                "Başlangıç tarihi uygun değil.",
+                responseNote,
             )
         }
     }

@@ -34,6 +34,7 @@ Flask + MongoDB backend for the `m7_24` Android application.
 - Job recommendation generation in MongoDB
 - `GET /api/users/<user_id>/dashboard` mobile dashboard summary with profile and recommendations
 - Worker job applications and employer-side application status updates
+- Capacity-backed job offers with worker acceptance or reasoned decline
 - Employer job posting CRUD with draft, published, and closed states
 - Published posting based profile matching with duplicate-application protection
 - Employer-configurable worker hub with assessments, trainings, useful info, shuttle planning, and Q&A
@@ -339,6 +340,22 @@ curl -X POST http://127.0.0.1:5050/api/users/<user_id>/job-applications/<applica
 
 The response is scoped to the current interview plan. Rescheduling replaces
 the plan and clears the previous worker response.
+
+Employers can move an application to `offered` with a future start date and
+an earlier response deadline. Posting-backed offers reserve one atomic hiring
+slot until the offer is accepted, declined, withdrawn by the employer, or
+expires. Workers respond with the same idempotency guarantees:
+
+```bash
+curl -X POST http://127.0.0.1:5050/api/users/<user_id>/job-applications/<application_id>/offer-response \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: <unique-key>" \
+  -d '{"status":"accepted"}'
+```
+
+Accepted offers move to `hired`. Declined offers move to `offer_declined` and
+require a note; their reserved hiring slot is released immediately.
 
 Video upload, worker question, assessment, training, shuttle, and
 job-application mutations require a unique `Idempotency-Key`. Video uploads

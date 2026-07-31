@@ -279,12 +279,15 @@ def test_worker_account_deletion_erases_personal_data_and_revokes_session(
                 "createdAt": now,
             }
         )
+        posting_id = ObjectId()
         application_id = db.jobApplications.insert_one(
             {
                 "userId": user_id,
                 "jobRecommendationId": ObjectId(),
+                "jobPostingId": posting_id,
                 "employerKey": "default",
-                "status": "submitted",
+                "status": "offered",
+                "hiringSlot": 1,
                 "coverNote": "private cover note",
                 "candidate": {
                     "name": "Private Worker",
@@ -294,7 +297,7 @@ def test_worker_account_deletion_erases_personal_data_and_revokes_session(
                 },
                 "statusHistory": [
                     {
-                        "status": "submitted",
+                        "status": "offered",
                         "note": "private note",
                         "changedAt": now,
                     }
@@ -310,10 +313,30 @@ def test_worker_account_deletion_erases_personal_data_and_revokes_session(
                     },
                     "updatedAt": now,
                 },
+                "offer": {
+                    "startDate": now,
+                    "expiresAt": now,
+                    "note": "employer offer note",
+                    "response": {
+                        "status": "declined",
+                        "note": "private offer response",
+                        "respondedAt": now,
+                    },
+                    "updatedAt": now,
+                },
                 "createdAt": now,
                 "updatedAt": now,
             }
         ).inserted_id
+        db.jobHiringSlots.insert_one(
+            {
+                "jobPostingId": posting_id,
+                "applicationId": application_id,
+                "slot": 1,
+                "createdAt": now,
+                "updatedAt": now,
+            }
+        )
         db.actionRateLimits.insert_one(
             {
                 "rateKey": hashlib.sha256(
@@ -386,10 +409,15 @@ def test_worker_account_deletion_erases_personal_data_and_revokes_session(
         assert len(application["statusHistory"]) == 1
         assert (
             application["statusHistory"][0]["status"]
-            == "submitted"
+            == "offered"
         )
         assert "note" not in application["statusHistory"][0]
         assert "response" not in application["interview"]
+        assert "response" not in application["offer"]
+        assert "hiringSlot" not in application
+        assert db.jobHiringSlots.count_documents(
+            {"applicationId": application_id}
+        ) == 0
         deletion = db.accountDeletionRecords.find_one(
             {"_id": user_id}
         )

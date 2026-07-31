@@ -38,6 +38,8 @@ const statusLabels = {
     submitted: "Yeni başvuru",
     reviewing: "İnceleniyor",
     shortlisted: "Kısa liste",
+    offered: "İş teklifi gönderildi",
+    offer_declined: "Teklif çalışan tarafından reddedildi",
     rejected: "Reddedildi",
     hired: "İşe alındı",
     withdrawn: "Çalışan geri çekti",
@@ -114,8 +116,8 @@ function initialize() {
     });
     document.getElementById("item-form").addEventListener("submit", saveContentItem);
     document.getElementById("decision-form").addEventListener("submit", saveDecision);
-    document.getElementById("decision-status").addEventListener("change", syncDecisionInterviewFields);
-    document.getElementById("interview-clear").addEventListener("change", syncDecisionInterviewFields);
+    document.getElementById("decision-status").addEventListener("change", syncDecisionFields);
+    document.getElementById("interview-clear").addEventListener("change", syncDecisionFields);
     document.getElementById("invite-form").addEventListener("submit", saveWorkerInvitation);
     document.getElementById("job-form").addEventListener("submit", saveJobPosting);
     document.getElementById("question-form").addEventListener("submit", saveQuestionAnswer);
@@ -1572,10 +1574,36 @@ function openApplicationDecision(application) {
     );
     responseNote.textContent = interviewResponse?.note || "";
     responseNote.hidden = !interviewResponse?.note;
+    document.getElementById("offer-start-date").value =
+        toDateTimeLocal(application.offer?.startDate);
+    document.getElementById("offer-expires-at").value =
+        toDateTimeLocal(application.offer?.expiresAt);
+    document.getElementById("offer-note").value =
+        application.offer?.note || "";
+    const offerResponse = application.offer?.response;
+    const offerResponseSummary = document.getElementById(
+        "offer-response-summary",
+    );
+    document.getElementById("application-offer-response").hidden =
+        !offerResponse;
+    offerResponseSummary.hidden = !offerResponse;
+    document.getElementById("offer-response-status").textContent =
+        offerResponse?.status === "accepted"
+            ? "Çalışan iş teklifini kabul etti"
+            : "Çalışan iş teklifini reddetti";
+    document.getElementById("offer-response-at").textContent =
+        offerResponse?.respondedAt
+            ? `Yanıt tarihi: ${formatDate(offerResponse.respondedAt)}`
+            : "";
+    const offerResponseNote = document.getElementById(
+        "offer-response-note",
+    );
+    offerResponseNote.textContent = offerResponse?.note || "";
+    offerResponseNote.hidden = !offerResponse?.note;
     document.getElementById("interview-clear").checked = false;
     document.getElementById("interview-clear-label").hidden =
         !application.interview;
-    syncDecisionInterviewFields();
+    syncDecisionFields();
     document.getElementById("decision-dialog").showModal();
 }
 
@@ -1588,16 +1616,24 @@ function openShuttleDecision(requestId, status) {
     document.getElementById("decision-note").value = "";
     document.getElementById("decision-error").textContent = "";
     document.getElementById("application-interview-fields").hidden = true;
+    document.getElementById("application-offer-response").hidden = true;
+    document.getElementById("application-offer-fields").hidden = true;
+    ["offer-start-date", "offer-expires-at"].forEach((id) => {
+        document.getElementById(id).required = false;
+    });
     document.getElementById("decision-dialog").showModal();
 }
 
-function syncDecisionInterviewFields() {
-    const section = document.getElementById("application-interview-fields");
+function syncDecisionFields() {
+    const interviewSection = document.getElementById("application-interview-fields");
     const isApplication = state.decision?.type === "application";
-    const activeStatus = ["reviewing", "shortlisted"].includes(
-        document.getElementById("decision-status").value,
+    const selectedStatus = document.getElementById(
+        "decision-status",
+    ).value;
+    const activeInterviewStatus = ["reviewing", "shortlisted"].includes(
+        selectedStatus,
     );
-    section.hidden = !isApplication || !activeStatus;
+    interviewSection.hidden = !isApplication || !activeInterviewStatus;
     const disabled = document.getElementById("interview-clear").checked;
     [
         "interview-scheduled-at",
@@ -1606,6 +1642,14 @@ function syncDecisionInterviewFields() {
         "interview-note",
     ].forEach((id) => {
         document.getElementById(id).disabled = disabled;
+    });
+    const offerSection = document.getElementById(
+        "application-offer-fields",
+    );
+    const offerActive = isApplication && selectedStatus === "offered";
+    offerSection.hidden = !offerActive;
+    ["offer-start-date", "offer-expires-at"].forEach((id) => {
+        document.getElementById(id).required = offerActive;
     });
 }
 
@@ -1623,6 +1667,8 @@ async function saveDecision(event) {
             const body = {status, note};
             const interview = readInterviewDecision();
             if (interview !== undefined) body.interview = interview;
+            const offer = readOfferDecision();
+            if (offer !== undefined) body.offer = offer;
             await api(`/api/employers/${encodeURIComponent(state.employerKey)}/job-applications/${encodeURIComponent(state.decision.id)}`, {
                 method: "PATCH",
                 body,
@@ -1670,6 +1716,35 @@ function readInterviewDecision() {
         type,
         location,
         note: document.getElementById("interview-note").value.trim(),
+    };
+}
+
+function readOfferDecision() {
+    if (document.getElementById("decision-status").value !== "offered") {
+        return undefined;
+    }
+    const startValue = document.getElementById(
+        "offer-start-date",
+    ).value;
+    const expiresValue = document.getElementById(
+        "offer-expires-at",
+    ).value;
+    if (!startValue || !expiresValue) {
+        throw new Error(
+            "İş teklifi için başlangıç ve son yanıt tarihleri zorunludur.",
+        );
+    }
+    const startDate = new Date(startValue);
+    const expiresAt = new Date(expiresValue);
+    if (expiresAt >= startDate) {
+        throw new Error(
+            "Son yanıt tarihi başlangıç tarihinden önce olmalıdır.",
+        );
+    }
+    return {
+        startDate: startDate.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        note: document.getElementById("offer-note").value.trim(),
     };
 }
 
@@ -1923,6 +1998,17 @@ function applicationTable(items, actionable) {
                                         </span>
                                     ` : ""}
                                 ` : ""}
+                                ${item.offer ? `
+                                    <span class="cell-subtitle">Başlangıç: ${formatDate(item.offer.startDate)}</span>
+                                    <span class="cell-subtitle">Son yanıt: ${formatDate(item.offer.expiresAt)}</span>
+                                    ${item.offer.response ? `
+                                        <span class="cell-subtitle">
+                                            Teklif yanıtı: ${item.offer.response.status === "accepted"
+                                                ? "Kabul edildi"
+                                                : "Reddedildi"}
+                                        </span>
+                                    ` : ""}
+                                ` : ""}
                             </td>
                             <td>${formatDate(item.createdAt)}</td>
                             ${actionable ? `<td>${["withdrawn", "hired"].includes(item.status)
@@ -2007,6 +2093,10 @@ function statusOptions(selected, includeAll) {
         "submitted",
         "reviewing",
         "shortlisted",
+        "offered",
+        ...(includeAll || selected === "offer_declined"
+            ? ["offer_declined"]
+            : []),
         "rejected",
         "hired",
         ...(includeAll ? ["withdrawn"] : []),

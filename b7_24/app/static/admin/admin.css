@@ -505,6 +505,7 @@ tbody tr:last-child td {
 }
 
 .status-badge.submitted,
+.status-badge.offered,
 .status-badge.requested,
 .status-badge.pending,
 .status-badge.required {
@@ -521,6 +522,7 @@ tbody tr:last-child td {
 }
 
 .status-badge.rejected,
+.status-badge.offer_declined,
 .status-badge.failed {
     background: var(--danger-soft);
     color: var(--danger);
